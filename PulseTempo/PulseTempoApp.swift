@@ -11,7 +11,7 @@ import SwiftUI
 struct PulseTempoApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ActiveRunView()
         }
     }
 }
