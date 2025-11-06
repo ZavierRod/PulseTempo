@@ -16,7 +16,21 @@ struct OnboardingCoordinator: View {
     // MARK: - Properties
 
     /// Callback fired when onboarding has completed and the user can enter the app.
-    var onFinished: () -> Void
+    private let onFinished: () -> Void
+    private let healthKitManager: HealthKitManager
+    private let musicKitManager: MusicKitManager
+
+    @Environment(\.scenePhase) private var scenePhase
+
+    init(
+        healthKitManager: HealthKitManager = .shared,
+        musicKitManager: MusicKitManager = .shared,
+        onFinished: @escaping () -> Void
+    ) {
+        self.healthKitManager = healthKitManager
+        self.musicKitManager = musicKitManager
+        self.onFinished = onFinished
+    }
 
     // MARK: - State
 
@@ -56,6 +70,7 @@ struct OnboardingCoordinator: View {
 
             case .healthKit:
                 HealthKitPermissionView(
+                    healthKitManager: healthKitManager,
                     onAuthorized: {
                         healthAuthorizationStatus = .sharingAuthorized
                         advanceFromHealthKit()
@@ -70,6 +85,8 @@ struct OnboardingCoordinator: View {
 
             case .musicKit:
                 MusicKitPermissionView(
+                    initialStatus: musicAuthorizationStatus,
+                    musicKitManager: musicKitManager,
                     onAuthorized: {
                         musicAuthorizationStatus = .authorized
                         advanceFromMusicKit()
@@ -90,6 +107,10 @@ struct OnboardingCoordinator: View {
         .task {
             refreshAuthorizationStates()
         }
+        .onChange(of: scenePhase) { newPhase in
+            guard newPhase == .active else { return }
+            refreshAuthorizationStates()
+        }
         .onChange(of: healthAuthorizationStatus) { _ in
             reevaluateFlow()
         }
@@ -102,8 +123,8 @@ struct OnboardingCoordinator: View {
 
     /// Reads the current permission states and updates onboarding flow accordingly.
     private func refreshAuthorizationStates() {
-        healthAuthorizationStatus = HealthKitManager.shared.getAuthorizationStatus()
-        musicAuthorizationStatus = MusicKitManager.shared.authorizationStatus
+        healthAuthorizationStatus = healthKitManager.getAuthorizationStatus()
+        musicAuthorizationStatus = musicKitManager.authorizationStatus
         reevaluateFlow()
     }
 

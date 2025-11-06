@@ -23,6 +23,20 @@ struct HealthKitPermissionView: View {
     /// Optional callback when the user chooses to skip
     var onSkip: (() -> Void)?
 
+    private let healthKitManager: HealthKitManager
+
+    init(
+        healthKitManager: HealthKitManager = .shared,
+        onAuthorized: @escaping () -> Void,
+        onBack: (() -> Void)? = nil,
+        onSkip: (() -> Void)? = nil
+    ) {
+        self.healthKitManager = healthKitManager
+        self.onAuthorized = onAuthorized
+        self.onBack = onBack
+        self.onSkip = onSkip
+    }
+
     // MARK: - State
 
     @State private var authorizationStatus: HKAuthorizationStatus = .notDetermined
@@ -200,7 +214,7 @@ struct HealthKitPermissionView: View {
     // MARK: - Actions
 
     private func refreshAuthorizationStatus() {
-        authorizationStatus = HealthKitManager.shared.getAuthorizationStatus()
+        authorizationStatus = healthKitManager.getAuthorizationStatus()
     }
 
     private func requestAuthorization() {
@@ -212,7 +226,7 @@ struct HealthKitPermissionView: View {
         isRequesting = true
         errorMessage = nil
 
-        HealthKitManager.shared.requestAuthorization { success, error in
+        healthKitManager.requestAuthorization { success, error in
             isRequesting = false
             refreshAuthorizationStatus()
 

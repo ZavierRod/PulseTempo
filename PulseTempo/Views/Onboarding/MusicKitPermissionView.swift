@@ -32,14 +32,18 @@ struct MusicKitPermissionView: View {
     @State private var hasSubscription: Bool?
     @State private var errorMessage: String?
 
+    private let musicKitManager: MusicKitManager
+
     // MARK: - Initialization
 
     init(
         initialStatus: MusicAuthorization.Status = .notDetermined,
+        musicKitManager: MusicKitManager = .shared,
         onAuthorized: @escaping () -> Void,
         onBack: (() -> Void)? = nil,
         onSkip: (() -> Void)? = nil
     ) {
+        self.musicKitManager = musicKitManager
         self.onAuthorized = onAuthorized
         self.onBack = onBack
         self.onSkip = onSkip
@@ -284,7 +288,7 @@ struct MusicKitPermissionView: View {
 
     @MainActor
     private func refreshAuthorizationStatus() {
-        let status = MusicKitManager.shared.authorizationStatus
+        let status = musicKitManager.authorizationStatus
         apply(status)
     }
 
@@ -295,7 +299,7 @@ struct MusicKitPermissionView: View {
         errorMessage = nil
 
         Task {
-            await MusicKitManager.shared.requestAuthorization { status in
+            await musicKitManager.requestAuthorization { status in
                 Task { @MainActor in
                     isRequesting = false
                     apply(status)
@@ -331,7 +335,7 @@ struct MusicKitPermissionView: View {
             guard authorizationStatus == .authorized else { return }
 
             isCheckingSubscription = true
-            let subscribed = await MusicKitManager.shared.checkSubscriptionStatus()
+            let subscribed = await musicKitManager.checkSubscriptionStatus()
             hasSubscription = subscribed
             isCheckingSubscription = false
         }
@@ -355,7 +359,7 @@ struct MusicKitPermissionView: View {
     private func presentSubscriptionOffer() {
         Task { @MainActor in
             isCheckingSubscription = true
-            MusicKitManager.shared.presentSubscriptionOffer()
+            musicKitManager.presentSubscriptionOffer()
             // After presenting the offer, optimistically assume the user may subscribe.
             isCheckingSubscription = false
             updateSubscriptionStatus()
