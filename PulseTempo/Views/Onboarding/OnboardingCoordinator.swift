@@ -56,16 +56,34 @@ struct OnboardingCoordinator: View {
 
             case .healthKit:
                 HealthKitPermissionView(
-                    authorizationStatus: healthAuthorizationStatus,
-                    onRequestAuthorization: requestHealthKitAuthorization,
-                    onContinue: advanceFromHealthKit
+                    onAuthorized: {
+                        healthAuthorizationStatus = .sharingAuthorized
+                        advanceFromHealthKit()
+                    },
+                    onBack: {
+                        currentStep = .welcome
+                    },
+                    onSkip: {
+                        currentStep = .musicKit
+                    }
                 )
 
             case .musicKit:
                 MusicKitPermissionView(
-                    authorizationStatus: musicAuthorizationStatus,
-                    onRequestAuthorization: requestMusicKitAuthorization,
-                    onContinue: advanceFromMusicKit
+                    onAuthorized: {
+                        musicAuthorizationStatus = .authorized
+                        advanceFromMusicKit()
+                    },
+                    onBack: {
+                        if isHealthAuthorized {
+                            currentStep = .healthKit
+                        } else {
+                            currentStep = .welcome
+                        }
+                    },
+                    onSkip: {
+                        finishOnboarding()
+                    }
                 )
             }
         }
@@ -151,24 +169,4 @@ struct OnboardingCoordinator: View {
         onFinished()
     }
 
-    // MARK: - Authorization Helpers
-
-    /// Requests HealthKit authorization and updates the stored status once complete.
-    private func requestHealthKitAuthorization() {
-        HealthKitManager.shared.requestAuthorization { success, _ in
-            healthAuthorizationStatus = HealthKitManager.shared.getAuthorizationStatus()
-
-            if success {
-                advanceFromHealthKit()
-            }
-        }
-    }
-
-    /// Requests MusicKit authorization and updates the stored status once complete.
-    private func requestMusicKitAuthorization() {
-        MusicKitManager.shared.requestAuthorization { status in
-            musicAuthorizationStatus = status
-            advanceFromMusicKit()
-        }
-    }
 }
