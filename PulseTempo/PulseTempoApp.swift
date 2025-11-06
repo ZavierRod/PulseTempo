@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Foundation
 
 @main
 struct PulseTempoApp: App {
@@ -18,18 +19,43 @@ struct PulseTempoApp: App {
 
 /// Coordinates navigation between onboarding and main app
 struct AppCoordinator: View {
-    @State private var hasCompletedOnboarding = false
-    
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+
+    private let healthKitManager: HealthKitManager
+    private let musicKitManager: MusicKitManager
+
+    init(
+        healthKitManager: HealthKitManager = .shared,
+        musicKitManager: MusicKitManager = .shared
+    ) {
+        self.healthKitManager = healthKitManager
+        self.musicKitManager = musicKitManager
+    }
+
+    private var shouldBypassOnboarding: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("SKIP_ONBOARDING")
+        #else
+        false
+        #endif
+    }
+
     var body: some View {
-        if hasCompletedOnboarding {
-            // Main app view
-            ActiveRunView()
-        } else {
-            // Onboarding flow
-            OnboardingCoordinator {
-                withAnimation {
-                    hasCompletedOnboarding = true
-                }
+        Group {
+            if hasCompletedOnboarding || shouldBypassOnboarding {
+                // Main app view
+                ActiveRunView()
+            } else {
+                // Onboarding flow
+                OnboardingCoordinator(
+                    healthKitManager: healthKitManager,
+                    musicKitManager: musicKitManager,
+                    onFinished: {
+                        withAnimation {
+                            hasCompletedOnboarding = true
+                        }
+                    }
+                )
             }
         }
     }
