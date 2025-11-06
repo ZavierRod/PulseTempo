@@ -26,8 +26,7 @@ struct AppCoordinator: View {
             ActiveRunView()
         } else {
             // Onboarding flow
-            WelcomeView {
-                // When user taps "Get Started", move to main app
+            OnboardingCoordinator {
                 withAnimation {
                     hasCompletedOnboarding = true
                 }
