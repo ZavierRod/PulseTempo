@@ -69,15 +69,21 @@ Integrate MusicKit for Apple Music control:
 
 #### Onboarding Flow
 - Welcome screen with app explanation
+- **Account creation / Sign in with Apple step** (creates or restores a backend session)
 - HealthKit permission request
 - Apple Music authorization
 - Apple Watch pairing check
 
 **Files to create:**
 - `PulseTempo/Views/Onboarding/WelcomeView.swift`
+- `PulseTempo/Views/Onboarding/AccountCreationView.swift`
 - `PulseTempo/Views/Onboarding/HealthKitPermissionView.swift`
 - `PulseTempo/Views/Onboarding/MusicKitPermissionView.swift`
 - `PulseTempo/Views/Onboarding/OnboardingCoordinator.swift`
+
+**Backend requirements:**
+- FastAPI endpoint for account creation / authentication (JWT issuance, token refresh)
+- Secure token storage strategy on iOS (Keychain) coordinated with onboarding state
 
 #### Playlist Selection Screen
 - Fetch and display user's Apple Music playlists
@@ -86,6 +92,16 @@ Integrate MusicKit for Apple Music control:
 
 **Files to create:**
 - `PulseTempo/Views/PlaylistSelectionView.swift`
+
+#### Home Library & Sharing Screen
+- Central hub post-onboarding that surfaces the user's Apple Music playlists
+- Allow users to select playlists to sync/share with PulseTempo
+- Trigger track fetches to populate the in-app experience and prep uploads to backend
+- Provide share/export actions (e.g., ShareLink or API call) for selected playlists
+
+**Files to create:**
+- `PulseTempo/Views/HomeView.swift`
+- `PulseTempo/ViewModels/HomeViewModel.swift` *(or reuse `PlaylistSelectionViewModel` if sufficient)*
 
 #### Run Mode Selection
 - Choose between Steady Tempo, Progressive Build, Recovery
@@ -212,6 +228,19 @@ backend/
 - `GET /api/runs/{user_id}` - Get user's run history
 - `GET /api/runs/{run_id}/details` - Get detailed run data
 - `GET /api/users/{user_id}/stats` - Get aggregate statistics
+
+### 2.5 Authentication & Account Management
+
+#### Capabilities
+- User registration / Sign in with Apple token exchange
+- Session issuance (JWT + refresh tokens)
+- Secure storage of Apple Music user identifiers and consent timestamps
+- Endpoint for validating an existing session during app launch
+
+#### iOS Integration Points
+- `AccountCreationView` posts sign-in credentials to FastAPI and stores the returned tokens in Keychain
+- `OnboardingCoordinator` checks session validity before advancing to permission steps
+- `APIService` refreshes tokens and injects Authorization headers for subsequent requests
 
 ---
 
