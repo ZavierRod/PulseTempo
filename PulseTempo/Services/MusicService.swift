@@ -364,7 +364,7 @@ final class MusicService: ObservableObject {
             
             do {
                 // Request user's library playlists using Apple Music API
-                let url = URL(string: "https://api.music.apple.com/v1/me/library/playlists")!
+                let url = URL(string: "https://api.music.apple.com/v1/me/library/playlists?limit=100")!
                 var request = MusicDataRequest(urlRequest: URLRequest(url: url))
                 let response = try await request.response()
                 
@@ -373,11 +373,13 @@ final class MusicService: ObservableObject {
                 let playlistsResponse = try decoder.decode(LibraryPlaylistsResponse.self, from: response.data)
                 
                 // Convert to our MusicPlaylist model
+                // Note: Track count is not available from the list API, would require individual fetches
+                // which causes rate limiting. We'll show playlists without track counts for now.
                 let playlistModels = playlistsResponse.data.map { playlist in
                     MusicPlaylist(
                         id: playlist.id,
                         name: playlist.attributes.name,
-                        trackCount: playlist.attributes.trackCount ?? 0,
+                        trackCount: 0,  // Track count not available from list endpoint
                         artwork: playlist.attributes.artwork
                     )
                 }
@@ -604,15 +606,32 @@ private struct LibraryPlaylistsResponse: Codable {
     let data: [LibraryPlaylistItem]
 }
 
+/// Response structure for a single library playlist
+private struct SingleLibraryPlaylistResponse: Codable {
+    let data: LibraryPlaylistItem
+}
+
 private struct LibraryPlaylistItem: Codable {
     let id: String
     let attributes: LibraryPlaylistAttributes
+    let relationships: LibraryPlaylistRelationships?
 }
 
 private struct LibraryPlaylistAttributes: Codable {
     let name: String
-    let trackCount: Int?
     let artwork: Artwork?
+}
+
+private struct LibraryPlaylistRelationships: Codable {
+    let tracks: TracksRelationship?
+}
+
+private struct TracksRelationship: Codable {
+    let data: [TrackReference]?
+}
+
+private struct TrackReference: Codable {
+    let id: String
 }
 
 /// Response structure for library tracks from Apple Music API

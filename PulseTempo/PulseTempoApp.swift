@@ -43,8 +43,8 @@ struct AppCoordinator: View {
     var body: some View {
         Group {
             if hasCompletedOnboarding || shouldBypassOnboarding {
-                // Main app view
-                ActiveRunView()
+                // Main app view - Home Screen Dashboard
+                HomeView()
             } else {
                 // Onboarding flow
                 OnboardingCoordinator(
