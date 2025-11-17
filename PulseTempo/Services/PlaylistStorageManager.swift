@@ -22,9 +22,11 @@ final class PlaylistStorageManager: PlaylistStorageManaging {
     static let shared = PlaylistStorageManager()
 
     private let userDefaults: UserDefaults
+    private let suiteName: String?
 
-    init(userDefaults: UserDefaults = .standard) {
+    init(userDefaults: UserDefaults = .standard, suiteName: String? = nil) {
         self.userDefaults = userDefaults
+        self.suiteName = suiteName
     }
     
     // MARK: - Storage Keys
@@ -50,7 +52,12 @@ final class PlaylistStorageManager: PlaylistStorageManaging {
     
     /// Clear all saved playlist selections
     func clearSelectedPlaylists() {
-        userDefaults.removeObject(forKey: StorageKey.selectedPlaylistIds)
+        if let suiteName {
+            // Clearing the entire suite ensures stale test data doesn't linger between runs
+            userDefaults.removePersistentDomain(forName: suiteName)
+        } else {
+            userDefaults.removeObject(forKey: StorageKey.selectedPlaylistIds)
+        }
         print("🗑️ Cleared saved playlist selections")
     }
     

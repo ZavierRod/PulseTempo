@@ -9,7 +9,10 @@ final class PlaylistStorageManagerTests: XCTestCase {
         super.setUp()
         userDefaults = UserDefaults(suiteName: "PlaylistStorageManagerTests")
         userDefaults.removePersistentDomain(forName: "PlaylistStorageManagerTests")
-        storageManager = PlaylistStorageManager(userDefaults: userDefaults)
+        storageManager = PlaylistStorageManager(
+            userDefaults: userDefaults,
+            suiteName: "PlaylistStorageManagerTests"
+        )
     }
 
     override func tearDown() {
@@ -35,7 +38,10 @@ final class PlaylistStorageManagerTests: XCTestCase {
 
     func testPersistenceAcrossInstances() {
         storageManager.saveSelectedPlaylists(["10", "20"])
-        let newManager = PlaylistStorageManager(userDefaults: userDefaults)
+        let newManager = PlaylistStorageManager(
+            userDefaults: userDefaults,
+            suiteName: "PlaylistStorageManagerTests"
+        )
         XCTAssertEqual(newManager.loadSelectedPlaylists(), ["10", "20"])
     }
 
