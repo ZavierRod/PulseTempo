@@ -33,14 +33,19 @@ final class HomeViewModel: ObservableObject {
     // MARK: - Private Properties
     
     /// Music service for fetching playlists
-    private let musicService = MusicService()
+    private let musicService: MusicServiceProtocol
+
+    /// Playlist storage manager
+    private let storageManager: PlaylistStorageManaging
     
     /// Combine subscriptions
     private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Initialization
     
-    init() {
+    init(musicService: MusicServiceProtocol = MusicService(), storageManager: PlaylistStorageManaging = PlaylistStorageManager.shared) {
+        self.musicService = musicService
+        self.storageManager = storageManager
         loadSelectedPlaylists()
         loadLastWorkout()
     }
@@ -55,7 +60,7 @@ final class HomeViewModel: ObservableObject {
     /// Load selected playlists from UserDefaults
     private func loadSelectedPlaylists() {
         // Load saved playlist IDs from storage
-        let savedPlaylistIds = PlaylistStorageManager.shared.loadSelectedPlaylists()
+        let savedPlaylistIds = storageManager.loadSelectedPlaylists()
         
         // If no saved playlists, show empty state
         guard !savedPlaylistIds.isEmpty else {
@@ -101,14 +106,14 @@ final class HomeViewModel: ObservableObject {
     
     /// Save selected playlists to storage
     func saveSelectedPlaylists(_ playlistIds: [String]) {
-        PlaylistStorageManager.shared.saveSelectedPlaylists(playlistIds)
+        storageManager.saveSelectedPlaylists(playlistIds)
         // Refresh to show updated selections
         refreshPlaylists()
     }
     
     /// Fetch all tracks from selected playlists for workout
     func fetchTracksForWorkout(completion: @escaping (Result<[Track], Error>) -> Void) {
-        let savedPlaylistIds = PlaylistStorageManager.shared.loadSelectedPlaylists()
+        let savedPlaylistIds = storageManager.loadSelectedPlaylists()
         
         guard !savedPlaylistIds.isEmpty else {
             completion(.failure(NSError(

@@ -9,6 +9,20 @@ import Foundation
 import MusicKit
 import Combine
 
+protocol MusicServiceProtocol: AnyObject {
+    var playbackStatePublisher: AnyPublisher<PlaybackState, Never> { get }
+    var currentTrackPublisher: AnyPublisher<Track?, Never> { get }
+    var errorPublisher: AnyPublisher<Error?, Never> { get }
+    func play(track: Track, completion: @escaping (Result<Void, Error>) -> Void)
+    func playQueue(tracks: [Track], startIndex: Int, completion: @escaping (Result<Void, Error>) -> Void)
+    func playNext(track: Track)
+    func pause()
+    func resume()
+    func stop()
+    func fetchUserPlaylists(completion: @escaping (Result<[MusicPlaylist], Error>) -> Void)
+    func fetchTracksFromPlaylist(playlistId: String, completion: @escaping (Result<[Track], Error>) -> Void)
+}
+
 /// Service for controlling Apple Music playback and managing the music queue
 ///
 /// This ObservableObject manages all music playback operations including:
@@ -26,7 +40,7 @@ import Combine
 ///     // Handle result
 /// }
 /// ```
-final class MusicService: ObservableObject {
+final class MusicService: ObservableObject, MusicServiceProtocol {
     
     // MARK: - Published Properties
     
@@ -48,6 +62,18 @@ final class MusicService: ObservableObject {
     
     /// Whether we're currently loading data
     @Published var isLoading: Bool = false
+
+    var playbackStatePublisher: AnyPublisher<PlaybackState, Never> {
+        $playbackState.eraseToAnyPublisher()
+    }
+
+    var currentTrackPublisher: AnyPublisher<Track?, Never> {
+        $currentTrack.eraseToAnyPublisher()
+    }
+
+    var errorPublisher: AnyPublisher<Error?, Never> {
+        $error.eraseToAnyPublisher()
+    }
     
     // MARK: - Private Properties
     

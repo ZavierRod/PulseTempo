@@ -9,6 +9,13 @@ import Foundation  // Basic Swift types
 import HealthKit   // Apple's health data framework
 import Combine     // Reactive programming framework
 
+protocol HeartRateServiceProtocol: AnyObject {
+    var currentHeartRatePublisher: AnyPublisher<Int, Never> { get }
+    var errorPublisher: AnyPublisher<Error?, Never> { get }
+    func startMonitoring(useDemoMode: Bool, completion: @escaping (Result<Void, Error>) -> Void)
+    func stopMonitoring()
+}
+
 // ═══════════════════════════════════════════════════════════
 // HEART RATE SERVICE
 // ═══════════════════════════════════════════════════════════
@@ -20,7 +27,7 @@ import Combine     // Reactive programming framework
 // receives data and updates subscribers
 
 /// Service for monitoring heart rate data during workouts
-final class HeartRateService: ObservableObject {
+final class HeartRateService: ObservableObject, HeartRateServiceProtocol {
     
     // ═══════════════════════════════════════════════════════════
     // PUBLISHED PROPERTIES (Observable State)
@@ -32,6 +39,14 @@ final class HeartRateService: ObservableObject {
     @Published var isMonitoring: Bool = false   // Is actively monitoring?
     @Published var error: Error?                // Any error that occurred
     @Published var isDemoMode: Bool = false     // Is using simulated heart rate?
+
+    var currentHeartRatePublisher: AnyPublisher<Int, Never> {
+        $currentHeartRate.eraseToAnyPublisher()
+    }
+
+    var errorPublisher: AnyPublisher<Error?, Never> {
+        $error.eraseToAnyPublisher()
+    }
     
     // ═══════════════════════════════════════════════════════════
     // PRIVATE PROPERTIES
