@@ -11,6 +11,7 @@ struct OnboardingCoordinator: View {
         case welcome
         case healthKit
         case musicKit
+        case playlistSelection
     }
 
     // MARK: - Properties
@@ -45,6 +46,9 @@ struct OnboardingCoordinator: View {
 
     /// Prevents firing the completion handler multiple times.
     @State private var didFinishOnboarding = false
+    
+    /// Tracks whether user has selected playlists
+    @State private var hasSelectedPlaylists = false
 
     // MARK: - Derived State
 
@@ -99,6 +103,22 @@ struct OnboardingCoordinator: View {
                         }
                     },
                     onSkip: {
+                        currentStep = .playlistSelection
+                    }
+                )
+            
+            case .playlistSelection:
+                OnboardingPlaylistSelectionView(
+                    onPlaylistsSelected: { tracks in
+                        hasSelectedPlaylists = true
+                        // TODO: Store selected tracks for the workout
+                        print("✅ User selected \(tracks.count) tracks from playlists")
+                        finishOnboarding()
+                    },
+                    onBack: {
+                        currentStep = .musicKit
+                    },
+                    onSkip: {
                         finishOnboarding()
                     }
                 )
@@ -130,8 +150,13 @@ struct OnboardingCoordinator: View {
 
     /// Determines whether additional onboarding steps are needed or if we can finish.
     private func reevaluateFlow() {
+        // Don't auto-advance if we're already past permissions
+        if currentStep == .playlistSelection {
+            return
+        }
+        
         if isHealthAuthorized && isMusicAuthorized {
-            finishOnboarding()
+            currentStep = .playlistSelection
             return
         }
 
@@ -147,6 +172,8 @@ struct OnboardingCoordinator: View {
             if !isHealthAuthorized {
                 currentStep = .healthKit
             }
+        case .playlistSelection:
+            break
         }
     }
 
@@ -157,7 +184,7 @@ struct OnboardingCoordinator: View {
         } else if !isMusicAuthorized {
             currentStep = .musicKit
         } else {
-            finishOnboarding()
+            currentStep = .playlistSelection
         }
     }
 
@@ -168,7 +195,7 @@ struct OnboardingCoordinator: View {
         }
 
         if isMusicAuthorized {
-            finishOnboarding()
+            currentStep = .playlistSelection
         } else {
             currentStep = .musicKit
         }
@@ -180,7 +207,7 @@ struct OnboardingCoordinator: View {
             return
         }
 
-        finishOnboarding()
+        currentStep = .playlistSelection
     }
 
     /// Sends the user into the main app experience by invoking `onFinished` once.
