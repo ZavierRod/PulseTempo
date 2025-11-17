@@ -623,6 +623,14 @@ struct MusicPlaylist: Identifiable, Equatable {
     let name: String
     let trackCount: Int
     let artwork: Artwork?
+    
+    // Custom Equatable implementation since Artwork is not Equatable
+    static func == (lhs: MusicPlaylist, rhs: MusicPlaylist) -> Bool {
+        return lhs.id == rhs.id &&
+               lhs.name == rhs.name &&
+               lhs.trackCount == rhs.trackCount
+        // Note: We don't compare artwork since it's not Equatable
+    }
 }
 
 // MARK: - Apple Music API Response Models

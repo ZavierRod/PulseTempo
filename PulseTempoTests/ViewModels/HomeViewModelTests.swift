@@ -60,9 +60,9 @@ final class HomeViewModelTests: XCTestCase {
     func testLoadingPlaylistsFiltersBySavedIds() {
         mockStorage.saveSelectedPlaylists(["one", "two"])
 
-        let playlistOne = MusicPlaylist(id: "one", name: "P1", trackCount: 1)
-        let playlistTwo = MusicPlaylist(id: "two", name: "P2", trackCount: 2)
-        let playlistThree = MusicPlaylist(id: "three", name: "P3", trackCount: 3)
+        let playlistOne = MusicPlaylist(id: "one", name: "P1", trackCount: 1, artwork: nil)
+        let playlistTwo = MusicPlaylist(id: "two", name: "P2", trackCount: 2, artwork: nil)
+        let playlistThree = MusicPlaylist(id: "three", name: "P3", trackCount: 3, artwork: nil)
 
         mockMusicService.fetchUserPlaylistsHandler = { completion in
             completion(.success([playlistOne, playlistTwo, playlistThree]))

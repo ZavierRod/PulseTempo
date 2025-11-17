@@ -2,10 +2,11 @@ import XCTest
 @testable import PulseTempo
 
 final class IntegrationFlowTests: XCTestCase {
+    
     func testOnboardingFlowPersistsPlaylists() {
         let storage = MockPlaylistStorageManager()
         let mockMusic = MockMusicService()
-        let playlists = [MusicPlaylist(id: "p1", name: "Warmup", trackCount: 2)]
+        let playlists = [MusicPlaylist(id: "p1", name: "Warmup", trackCount: 2, artwork: nil)]
         mockMusic.fetchUserPlaylistsHandler = { completion in completion(.success(playlists)) }
 
         let homeViewModel = HomeViewModel(musicService: mockMusic, storageManager: storage)
@@ -43,6 +44,9 @@ final class IntegrationFlowTests: XCTestCase {
         guard let defaults = UserDefaults(suiteName: suiteName) else {
             return XCTFail("Failed to create user defaults suite")
         }
+        
+        // Clean up before test
+        defaults.removePersistentDomain(forName: suiteName)
 
         let storage = PlaylistStorageManager(userDefaults: defaults, suiteName: suiteName)
         storage.clearSelectedPlaylists()
@@ -50,6 +54,9 @@ final class IntegrationFlowTests: XCTestCase {
 
         let reloaded = PlaylistStorageManager(userDefaults: defaults, suiteName: suiteName)
         XCTAssertEqual(reloaded.loadSelectedPlaylists(), ["abc"])
+        
+        // Clean up after test
+        defaults.removePersistentDomain(forName: suiteName)
     }
 
     private func waitForMainQueue() {
