@@ -95,17 +95,19 @@ final class RunSessionViewModel: ObservableObject {
     
     // INITIALIZER (Constructor)
     // Like Python's __init__ method
-    // Called when creating a new instance: let vm = RunSessionViewModel()
+    // Called when creating a new instance: let vm = RunSessionViewModel(tracks: myTracks)
     //
     // Python equivalent:
-    // def __init__(self):
+    // def __init__(self, tracks):
     //     self.heart_rate_service = HeartRateService()
     //     self.music_service = MusicService()
-    //     self._setup_fake_playlist()
+    //     self.tracks = tracks
     //     self._setup_observers()
-    init() {
-        setupFakePlaylist()                      // Load some fake tracks
+    init(tracks: [Track] = []) {
+        self.tracks = tracks.isEmpty ? createFakeTracks() : tracks
         setupObservers()                         // Connect to service updates
+        
+        print("🎵 RunSessionViewModel initialized with \(self.tracks.count) tracks")
     }
     
     // ═══════════════════════════════════════════════════════════
@@ -170,21 +172,21 @@ final class RunSessionViewModel: ObservableObject {
             .store(in: &cancellables)
     }
     
-    // PRIVATE METHOD: setupFakePlaylist
+    // PRIVATE METHOD: createFakeTracks
     // Creates dummy data for testing (like fixture data in Python tests)
     // "private func" = private method (like Python methods starting with _)
     //
     // Python equivalent:
-    // def _setup_fake_playlist(self):
-    //     self.tracks = [
+    // def _create_fake_tracks(self) -> List[Track]:
+    //     return [
     //         Track(id="1", title="Eye of the Tiger", ...),
     //         Track(id="2", title="Stronger", ...),
     //     ]
-    private func setupFakePlaylist() {
+    private func createFakeTracks() -> [Track] {
         // Create an array of Track objects
         // In Swift, you create objects by calling StructName(property: value, ...)
         // Similar to Python: Track(id="1", title="Eye of the Tiger", ...)
-        tracks = [
+        return [
             Track(
                 id: "1",
                 title: "Eye of the Tiger",
@@ -278,11 +280,16 @@ final class RunSessionViewModel: ObservableObject {
             // Select first track based on initial heart rate (or default 120 BPM)
             let initialTrack = selectTrackForHeartRate(120)
             
+            // Set current track immediately so UI shows it
+            currentTrack = initialTrack
+            print("🎵 Selected track: \(initialTrack.title) by \(initialTrack.artist)")
+            
             musicService.play(track: initialTrack) { [weak self] result in
                 switch result {
                 case .success:
                     print("✅ Music playback started")
                 case .failure(let error):
+                    print("⚠️ Music playback failed: \(error.localizedDescription)")
                     self?.errorMessage = "Failed to start music: \(error.localizedDescription)"
                 }
             }
@@ -298,6 +305,7 @@ final class RunSessionViewModel: ObservableObject {
     /// Pauses music but continues heart rate monitoring
     func pauseRun() {
         sessionState = .paused
+        isPlaying = false  // Update UI immediately
         musicService.pause()
         runTimer?.invalidate()
     }
@@ -306,6 +314,7 @@ final class RunSessionViewModel: ObservableObject {
     /// Resumes music playback
     func resumeRun() {
         sessionState = .active
+        isPlaying = true  // Update UI immediately
         musicService.resume()
         
         // Restart elapsed time timer
@@ -367,6 +376,38 @@ final class RunSessionViewModel: ObservableObject {
         musicService.play(track: nextTrack) { result in
             if case .failure(let error) = result {
                 print("Failed to skip track: \(error)")
+            }
+        }
+    }
+    
+    /// Skip to previous track
+    /// Goes back to the previously played track in the session
+    func skipToPreviousTrack() {
+        // Need at least 2 tracks in history (current + previous)
+        guard tracksPlayed.count >= 2 else {
+            print("⚠️ No previous track available")
+            return
+        }
+        
+        // Remove current track from history
+        tracksPlayed.removeLast()
+        
+        // Get the previous track
+        let previousTrack = tracksPlayed.last!
+        
+        // Remove it from history so it can be re-added when played
+        tracksPlayed.removeLast()
+        
+        // Remove from played IDs so it can be selected again
+        playedTrackIds.remove(previousTrack.id)
+        
+        // Play the previous track
+        currentTrack = previousTrack
+        print("⏮️ Going back to: \(previousTrack.title) by \(previousTrack.artist)")
+        
+        musicService.play(track: previousTrack) { result in
+            if case .failure(let error) = result {
+                print("Failed to play previous track: \(error)")
             }
         }
     }

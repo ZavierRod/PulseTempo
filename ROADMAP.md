@@ -103,14 +103,18 @@ Integrate MusicKit for Apple Music control:
 - `PulseTempo/Views/HomeView.swift`
 - `PulseTempo/ViewModels/HomeViewModel.swift` *(or reuse `PlaylistSelectionViewModel` if sufficient)*
 
-#### Run Mode Selection
+#### Run Mode Selection ⏸️ **DEFERRED**
+> **Note:** This feature will be implemented after Phase 2 (Backend) is complete, as it's not critical for MVP functionality. The app currently defaults to Steady Tempo mode.
+
 - Choose between Steady Tempo, Progressive Build, Recovery
 - Explain each mode's behavior
 
 **Files to create:**
 - `PulseTempo/Views/RunModeSelectionView.swift`
 
-#### Run Summary Screen
+#### Run Summary Screen ⏸️ **DEFERRED**
+> **Note:** This feature will be implemented after Phase 2 (Backend) is complete, as it requires workout history storage and analytics from the backend.
+
 - Display post-run statistics with charts
 - Heart rate graph over time
 - List of tracks played during run
@@ -119,6 +123,206 @@ Integrate MusicKit for Apple Music control:
 **Files to create:**
 - `PulseTempo/Views/RunSummaryView.swift`
 - `PulseTempo/Views/Components/HeartRateChart.swift`
+
+#### Home Screen (Dashboard) ✅ **COMPLETED**
+Central hub before starting workouts with key sections:
+
+**1. Quick Start Area**
+- Large "Start Workout" button as primary action
+- Last workout summary (duration, avg BPM, songs played)
+- Estimated workout info (selected playlist count, total songs available)
+
+**2. Playlist Management**
+- Selected playlists overview cards showing active playlists
+- "Manage Playlists" button to add/remove playlists
+- Track count badge (e.g., "142 songs ready for your workout")
+- Quick view option to see songs in each playlist
+
+**Files to create:**
+- `PulseTempo/Views/HomeView.swift`
+- `PulseTempo/ViewModels/HomeViewModel.swift`
+- `PulseTempo/Views/Components/PlaylistOverviewCard.swift`
+
+**Navigation Flow:**
+```
+Home Screen
+├─ [Start Workout] → ActiveRunView (workout in progress)
+├─ [Manage Playlists] → PlaylistSelectionView (edit selections)
+├─ [View Playlist] → PlaylistSongsView (see songs in a playlist)
+└─ [Past Workout] → RunSummaryView (workout details)
+```
+
+---
+
+## **Phase 1.4: Comprehensive Testing** (1 week)
+
+> **Critical:** All Phase 1 features must be thoroughly tested before proceeding to Phase 2 (Backend). This ensures a stable foundation for backend integration.
+
+### Testing Strategy
+
+#### Unit Tests
+Test individual components and business logic in isolation.
+
+**Service Layer Tests:**
+- `HeartRateService` - Mock heart rate data, test monitoring start/stop
+- `MusicService` - Mock MusicKit, test playback controls, queue management
+- `HealthKitManager` - Test authorization flow, permission handling
+- `MusicKitManager` - Test authorization flow
+- `PlaylistStorageManager` - Test save/load/clear operations
+
+**View Model Tests:**
+- `RunSessionViewModel` - Test track selection, BPM matching, state transitions
+  - **Critical:** Test rapid skip forward/backward scenarios
+  - Test `tracksPlayed` array management
+  - Test `playedTrackIds` set management
+  - Test edge cases (no previous track, end of playlist)
+- `PlaylistSelectionViewModel` - Test playlist fetching, selection logic
+- `HomeViewModel` - Test playlist loading, track fetching
+
+**Files to create:**
+```
+PulseTempoTests/
+├── Services/
+│   ├── HeartRateServiceTests.swift
+│   ├── MusicServiceTests.swift
+│   ├── HealthKitManagerTests.swift
+│   ├── MusicKitManagerTests.swift
+│   └── PlaylistStorageManagerTests.swift
+├── ViewModels/
+│   ├── RunSessionViewModelTests.swift
+│   ├── PlaylistSelectionViewModelTests.swift
+│   └── HomeViewModelTests.swift
+└── Models/
+    └── ModelsTests.swift
+```
+
+#### Integration Tests
+Test how components work together.
+
+**Key Integration Flows:**
+- Onboarding flow (Welcome → HealthKit → MusicKit → Playlist Selection → Home)
+- Playlist selection and persistence
+- Track fetching and workout initialization
+- Music playback and heart rate monitoring coordination
+
+**Files to create:**
+```
+PulseTempoTests/Integration/
+├── OnboardingFlowTests.swift
+├── PlaylistPersistenceTests.swift
+├── WorkoutFlowTests.swift
+└── MusicPlaybackIntegrationTests.swift
+```
+
+#### UI Tests
+Test user interactions and navigation flows.
+
+**Critical User Journeys:**
+1. Complete onboarding as new user
+2. Select playlists and start workout
+3. Control music playback during workout
+4. Navigate between screens
+5. Manage playlist selections from Home
+
+**Files to create:**
+```
+PulseTempoUITests/
+├── OnboardingUITests.swift
+├── HomeScreenUITests.swift
+├── PlaylistSelectionUITests.swift
+├── ActiveRunUITests.swift
+└── NavigationUITests.swift
+```
+
+#### Manual Testing Checklist
+
+**Onboarding:**
+- [ ] Welcome screen displays correctly
+- [ ] HealthKit permission request works
+- [ ] MusicKit permission request works
+- [ ] Playlist selection loads user's playlists
+- [ ] Can select/deselect playlists
+- [ ] Can view songs in a playlist
+- [ ] Continue button saves selections
+- [ ] Skip button works at each step
+- [ ] Back navigation works correctly
+
+**Home Screen:**
+- [ ] Displays selected playlists
+- [ ] Shows correct playlist count
+- [ ] "Manage Playlists" opens selection view
+- [ ] "Start Workout" button fetches tracks
+- [ ] Loading state shows while fetching
+- [ ] Error handling for failed track fetch
+- [ ] Navigation to ActiveRunView works
+
+**Active Run View:**
+- [ ] Displays selected track information
+- [ ] Heart rate simulation works
+- [ ] Play/pause button responds instantly
+- [ ] Next track button works
+- [ ] Previous track button works
+- [ ] Back to Home button works
+- [ ] Music playback controls work
+
+**Data Persistence:**
+- [ ] Selected playlists persist after app restart
+- [ ] Onboarding doesn't repeat after completion
+- [ ] Playlist selections survive app updates
+
+**Track Navigation & Playback:**
+- [ ] Skip forward works correctly
+- [ ] Skip backward works correctly
+- [ ] Multiple rapid skip forwards (5+ times)
+- [ ] Multiple rapid skip backwards (5+ times)
+- [ ] Alternating skip forward/backward rapidly
+- [ ] Skip backward at start of workout (no previous track)
+- [ ] Skip forward at end of playlist
+- [ ] Track history maintains correct order
+- [ ] `tracksPlayed` array doesn't grow unbounded
+- [ ] `playedTrackIds` set updates correctly
+- [ ] No duplicate tracks in history
+- [ ] UI updates correctly after each skip
+
+**Edge Cases:**
+- [ ] No playlists selected
+- [ ] No tracks in selected playlists
+- [ ] Network errors during playlist fetch
+- [ ] MusicKit authorization denied
+- [ ] HealthKit authorization denied
+- [ ] App backgrounding during workout
+
+Based on the code, the bugs are probably caused by:
+
+Race conditions - Multiple rapid taps trigger async operations that overlap
+Array manipulation issues - skipToPreviousTrack() removes items from tracksPlayed which can cause index errors
+State inconsistency - currentTrack, tracksPlayed, and playedTrackIds get out of sync
+Recommended Fix Approach
+When you write tests, you'll likely need to:
+
+Add debouncing - Prevent rapid button taps from triggering multiple operations
+Add guards - Check array bounds before removing items
+Synchronize state - Ensure all three data structures update atomically
+Add logging - Track state changes for debugging
+
+### Testing Tools & Frameworks
+
+**Recommended:**
+- XCTest (built-in)
+- Quick/Nimble (BDD-style testing)
+- Mockingbird or SwiftyMocky (mocking framework)
+- SnapshotTesting (UI regression testing)
+
+### Success Criteria
+
+Before moving to Phase 2, ensure:
+- [ ] 80%+ code coverage for critical paths
+- [ ] All unit tests passing
+- [ ] All integration tests passing
+- [ ] All UI tests passing
+- [ ] Manual testing checklist 100% complete
+- [ ] No critical bugs
+- [ ] Performance is acceptable (no UI lag, smooth animations)
 
 ---
 
