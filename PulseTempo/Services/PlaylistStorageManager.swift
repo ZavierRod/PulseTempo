@@ -52,12 +52,8 @@ final class PlaylistStorageManager: PlaylistStorageManaging {
     
     /// Clear all saved playlist selections
     func clearSelectedPlaylists() {
-        if let suiteName {
-            // Clearing the entire suite ensures stale test data doesn't linger between runs
-            userDefaults.removePersistentDomain(forName: suiteName)
-        } else {
-            userDefaults.removeObject(forKey: StorageKey.selectedPlaylistIds)
-        }
+        // Only remove the specific key we own; avoid nuking the entire suite.
+        userDefaults.removeObject(forKey: StorageKey.selectedPlaylistIds)
         print("🗑️ Cleared saved playlist selections")
     }
     

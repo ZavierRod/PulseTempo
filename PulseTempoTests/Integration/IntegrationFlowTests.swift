@@ -20,15 +20,17 @@ final class IntegrationFlowTests: XCTestCase {
         }
 
         onboardingDefaults = defaults
-        onboardingDefaults.removePersistentDomain(forName: onboardingSuiteName)
         onboardingStorage = PlaylistStorageManager(userDefaults: onboardingDefaults, suiteName: onboardingSuiteName)
+        // Clear any existing data safely
+        onboardingStorage.clearSelectedPlaylists()
     }
 
     override func tearDown() {
         homeViewModel = nil
+        
+        // Clear data safely without removing the entire domain
+        onboardingStorage?.clearSelectedPlaylists()
         onboardingStorage = nil
-
-        onboardingDefaults?.removePersistentDomain(forName: onboardingSuiteName)
         onboardingDefaults = nil
 
         UserDefaults.standard.removeObject(forKey: playlistKey)
@@ -80,19 +82,16 @@ final class IntegrationFlowTests: XCTestCase {
         guard let defaults = UserDefaults(suiteName: suiteName) else {
             return XCTFail("Failed to create user defaults suite")
         }
-        
-        // Clean up before test
-        defaults.removePersistentDomain(forName: suiteName)
 
         let storage = PlaylistStorageManager(userDefaults: defaults, suiteName: suiteName)
-        storage.clearSelectedPlaylists()
+        storage.clearSelectedPlaylists()  // Clear any existing data
         storage.saveSelectedPlaylists(["abc"])
 
         let reloaded = PlaylistStorageManager(userDefaults: defaults, suiteName: suiteName)
         XCTAssertEqual(reloaded.loadSelectedPlaylists(), ["abc"])
         
-        // Clean up after test
-        defaults.removePersistentDomain(forName: suiteName)
+        // Clean up by clearing the key only
+        storage.clearSelectedPlaylists()
     }
 
     private func waitForMainQueue() {
