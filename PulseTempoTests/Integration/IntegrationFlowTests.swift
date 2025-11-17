@@ -44,11 +44,11 @@ final class IntegrationFlowTests: XCTestCase {
             return XCTFail("Failed to create user defaults suite")
         }
 
-        let storage = PlaylistStorageManager(userDefaults: defaults)
+        let storage = PlaylistStorageManager(userDefaults: defaults, suiteName: suiteName)
         storage.clearSelectedPlaylists()
         storage.saveSelectedPlaylists(["abc"])
 
-        let reloaded = PlaylistStorageManager(userDefaults: defaults)
+        let reloaded = PlaylistStorageManager(userDefaults: defaults, suiteName: suiteName)
         XCTAssertEqual(reloaded.loadSelectedPlaylists(), ["abc"])
     }
 
