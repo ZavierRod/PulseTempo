@@ -70,13 +70,20 @@ final class RunSessionViewModel: ObservableObject {
     
     // SERVICE INSTANCES
     // These are the core services that power the app
-    private let heartRateService = HeartRateService()  // Monitors heart rate
-    private let musicService = MusicService()          // Controls music playback
+    private let heartRateService: HeartRateServiceProtocol  // Monitors heart rate
+    private let musicService: MusicServiceProtocol          // Controls music playback
     
     // TRACK MANAGEMENT
     private var tracks: [Track] = []             // All available tracks
     private var currentIndex: Int = 0            // Index of current track in the array
     private var playedTrackIds: Set<String> = [] // Track IDs already played (avoid repetition)
+    private let navigationQueue = DispatchQueue(label: "RunSessionViewModel.navigationQueue")
+    private var lastSkipTimestamp: Date?
+    private let skipDebounceInterval: TimeInterval = 0.3
+
+    var playedTrackIdsSnapshot: Set<String> {
+        navigationQueue.sync { playedTrackIds }
+    }
     
     // RUN METRICS TRACKING
     private var runStartTime: Date?              // When the run started
@@ -103,7 +110,13 @@ final class RunSessionViewModel: ObservableObject {
     //     self.music_service = MusicService()
     //     self.tracks = tracks
     //     self._setup_observers()
-    init(tracks: [Track] = []) {
+    init(
+        tracks: [Track] = [],
+        heartRateService: HeartRateServiceProtocol = HeartRateService(),
+        musicService: MusicServiceProtocol = MusicService()
+    ) {
+        self.heartRateService = heartRateService
+        self.musicService = musicService
         self.tracks = tracks.isEmpty ? createFakeTracks() : tracks
         setupObservers()                         // Connect to service updates
         
@@ -133,38 +146,37 @@ final class RunSessionViewModel: ObservableObject {
         // $currentHeartRate is a Publisher that emits whenever the property changes
         // .sink() subscribes to those changes (like .subscribe() in RxPy)
         // [weak self] prevents memory leaks (weak reference to self)
-        heartRateService.$currentHeartRate
+        heartRateService.currentHeartRatePublisher
             .sink { [weak self] heartRate in
                 self?.onHeartRateChanged(heartRate)
             }
             .store(in: &cancellables)  // Store subscription so it stays alive
         
         // OBSERVE MUSIC PLAYBACK STATE
-        musicService.$playbackState
+        musicService.playbackStatePublisher
             .sink { [weak self] state in
                 self?.isPlaying = (state == .playing)
             }
             .store(in: &cancellables)
-        
+
         // OBSERVE CURRENT TRACK FROM MUSIC SERVICE
-        musicService.$currentTrack
+        musicService.currentTrackPublisher
             .sink { [weak self] track in
                 if let track = track {
-                    self?.currentTrack = track
-                    self?.tracksPlayed.append(track)
+                    self?.recordTrackFromService(track)
                 }
             }
             .store(in: &cancellables)
         
         // OBSERVE ERRORS FROM SERVICES
-        heartRateService.$error
+        heartRateService.errorPublisher
             .compactMap { $0 }  // Filter out nil values
             .sink { [weak self] error in
                 self?.errorMessage = "Heart Rate Error: \(error.localizedDescription)"
             }
             .store(in: &cancellables)
         
-        musicService.$error
+        musicService.errorPublisher
             .compactMap { $0 }
             .sink { [weak self] error in
                 self?.errorMessage = "Music Error: \(error.localizedDescription)"
@@ -281,18 +293,7 @@ final class RunSessionViewModel: ObservableObject {
             let initialTrack = selectTrackForHeartRate(120)
             
             // Set current track immediately so UI shows it
-            currentTrack = initialTrack
-            print("🎵 Selected track: \(initialTrack.title) by \(initialTrack.artist)")
-            
-            musicService.play(track: initialTrack) { [weak self] result in
-                switch result {
-                case .success:
-                    print("✅ Music playback started")
-                case .failure(let error):
-                    print("⚠️ Music playback failed: \(error.localizedDescription)")
-                    self?.errorMessage = "Failed to start music: \(error.localizedDescription)"
-                }
-            }
+            queueTrackForPlayback(initialTrack, historyBaseline: [])
         }
         
         // Start timer for elapsed time
@@ -364,51 +365,38 @@ final class RunSessionViewModel: ObservableObject {
     /// Manually skip to the next track (uses current or provided heart rate for selection)
     /// - Parameter approximateHeartRate: Optional heart rate to use for track selection (defaults to current heart rate)
     func skipToNextTrack(approximateHeartRate: Int? = nil) {
-        guard !tracks.isEmpty else { return }
-        
-        // Use provided heart rate or fall back to current heart rate
-        let targetHeartRate = approximateHeartRate ?? currentHeartRate
-        
-        // Select next track based on target heart rate
-        let nextTrack = selectTrackForHeartRate(targetHeartRate)
-        
-        // Play the selected track
-        musicService.play(track: nextTrack) { result in
-            if case .failure(let error) = result {
-                print("Failed to skip track: \(error)")
-            }
+        navigationQueue.async { [weak self] in
+            guard let self else { return }
+            guard self.allowNavigationAction() else { return }
+            guard !self.tracks.isEmpty else { return }
+
+            let targetHeartRate = approximateHeartRate ?? self.currentHeartRate
+            let nextTrack = self.selectTrackForHeartRate(targetHeartRate)
+            self.playTrack(nextTrack)
         }
     }
     
     /// Skip to previous track
     /// Goes back to the previously played track in the session
     func skipToPreviousTrack() {
-        // Need at least 2 tracks in history (current + previous)
-        guard tracksPlayed.count >= 2 else {
-            print("⚠️ No previous track available")
-            return
-        }
-        
-        // Remove current track from history
-        tracksPlayed.removeLast()
-        
-        // Get the previous track
-        let previousTrack = tracksPlayed.last!
-        
-        // Remove it from history so it can be re-added when played
-        tracksPlayed.removeLast()
-        
-        // Remove from played IDs so it can be selected again
-        playedTrackIds.remove(previousTrack.id)
-        
-        // Play the previous track
-        currentTrack = previousTrack
-        print("⏮️ Going back to: \(previousTrack.title) by \(previousTrack.artist)")
-        
-        musicService.play(track: previousTrack) { result in
-            if case .failure(let error) = result {
-                print("Failed to play previous track: \(error)")
+        navigationQueue.async { [weak self] in
+            guard let self else { return }
+            guard self.allowNavigationAction() else { return }
+
+            guard self.tracksPlayed.count >= 2 else {
+                print("⚠️ No previous track available")
+                return
             }
+
+            var updatedHistory = self.tracksPlayed
+            let current = updatedHistory.removeLast()
+            let previousTrack = updatedHistory.removeLast()
+
+            var updatedPlayedIds = self.playedTrackIds
+            updatedPlayedIds.remove(current.id)
+            updatedPlayedIds.remove(previousTrack.id)
+
+            self.playTrack(previousTrack, historyBaseline: updatedHistory, playedIdsBaseline: updatedPlayedIds)
         }
     }
     
@@ -534,5 +522,79 @@ final class RunSessionViewModel: ObservableObject {
         // Final average already calculated incrementally
         // Could add more complex metrics here
         print("📊 Run completed - Avg HR: \(averageHeartRate), Max HR: \(maxHeartRate), Duration: \(Int(elapsedTime))s")
+    }
+}
+
+// MARK: - Track State Management
+private extension RunSessionViewModel {
+    func allowNavigationAction() -> Bool {
+        let now = Date()
+        if let last = lastSkipTimestamp, now.timeIntervalSince(last) < skipDebounceInterval {
+            return false
+        }
+        lastSkipTimestamp = now
+        return true
+    }
+
+    func recordTrackFromService(_ track: Track) {
+        navigationQueue.async { [weak self] in
+            guard let self else { return }
+            var updatedHistory = self.tracksPlayed
+            if updatedHistory.last?.id != track.id {
+                updatedHistory.append(track)
+            }
+
+            var updatedIds = self.playedTrackIds
+            updatedIds.insert(track.id)
+
+            DispatchQueue.main.async {
+                self.tracksPlayed = updatedHistory
+                self.playedTrackIds = updatedIds
+                self.currentTrack = track
+            }
+        }
+    }
+
+    func queueTrackForPlayback(_ track: Track, historyBaseline: [Track]?) {
+        navigationQueue.async { [weak self] in
+            guard let self else { return }
+            var updatedHistory = historyBaseline ?? self.tracksPlayed
+            updatedHistory.append(track)
+            var updatedIds = self.playedTrackIds
+            updatedIds.insert(track.id)
+
+            self.dispatchStateUpdate(track: track, history: updatedHistory, playedIds: updatedIds)
+
+            self.musicService.play(track: track) { [weak self] result in
+                if case .failure(let error) = result {
+                    print("Failed to start music: \(error)")
+                    self?.errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    func playTrack(_ track: Track, historyBaseline: [Track]? = nil, playedIdsBaseline: Set<String>? = nil) {
+        var updatedHistory = historyBaseline ?? tracksPlayed
+        updatedHistory.append(track)
+        var updatedIds = playedIdsBaseline ?? playedTrackIds
+        updatedIds.insert(track.id)
+
+        dispatchStateUpdate(track: track, history: updatedHistory, playedIds: updatedIds)
+
+        musicService.play(track: track) { [weak self] result in
+            if case .failure(let error) = result {
+                print("Failed to play track: \(error)")
+                self?.errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    func dispatchStateUpdate(track: Track, history: [Track], playedIds: Set<String>) {
+        DispatchQueue.main.async {
+            self.tracksPlayed = history
+            self.playedTrackIds = playedIds
+            self.currentTrack = track
+        }
     }
 }

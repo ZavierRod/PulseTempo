@@ -7,14 +7,25 @@
 
 import Foundation
 
+protocol PlaylistStorageManaging {
+    func saveSelectedPlaylists(_ playlistIds: [String])
+    func loadSelectedPlaylists() -> [String]
+    func clearSelectedPlaylists()
+    var hasSelectedPlaylists: Bool { get }
+}
+
 /// Manages persistent storage of selected playlist IDs
-final class PlaylistStorageManager {
+final class PlaylistStorageManager: PlaylistStorageManaging {
     
     // MARK: - Singleton
     
     static let shared = PlaylistStorageManager()
-    
-    private init() {}
+
+    private let userDefaults: UserDefaults
+
+    init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
+    }
     
     // MARK: - Storage Keys
     
@@ -26,20 +37,20 @@ final class PlaylistStorageManager {
     
     /// Save selected playlist IDs to UserDefaults
     func saveSelectedPlaylists(_ playlistIds: [String]) {
-        UserDefaults.standard.set(playlistIds, forKey: StorageKey.selectedPlaylistIds)
+        userDefaults.set(playlistIds, forKey: StorageKey.selectedPlaylistIds)
         print("💾 Saved \(playlistIds.count) playlist IDs to storage")
     }
     
     /// Load selected playlist IDs from UserDefaults
     func loadSelectedPlaylists() -> [String] {
-        let playlistIds = UserDefaults.standard.stringArray(forKey: StorageKey.selectedPlaylistIds) ?? []
+        let playlistIds = userDefaults.stringArray(forKey: StorageKey.selectedPlaylistIds) ?? []
         print("📂 Loaded \(playlistIds.count) playlist IDs from storage")
         return playlistIds
     }
     
     /// Clear all saved playlist selections
     func clearSelectedPlaylists() {
-        UserDefaults.standard.removeObject(forKey: StorageKey.selectedPlaylistIds)
+        userDefaults.removeObject(forKey: StorageKey.selectedPlaylistIds)
         print("🗑️ Cleared saved playlist selections")
     }
     
