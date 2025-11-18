@@ -41,7 +41,7 @@ protocol MusicServiceProtocol: AnyObject {
 ///     // Handle result
 /// }
 /// ```
-final class MusicService: ObservableObject, MusicServiceProtocol {
+class MusicService: ObservableObject, MusicServiceProtocol {
     
     // MARK: - Published Properties
     
@@ -79,15 +79,15 @@ final class MusicService: ObservableObject, MusicServiceProtocol {
     // MARK: - Private Properties
     
     /// Reference to the MusicKit authorization manager
-    private let musicKitManager = MusicKitManager.shared
+    internal let musicKitManager: MusicKitManager
     
     /// The system music player instance
     /// This is the main interface for controlling playback
-    private let player = ApplicationMusicPlayer.shared
+    internal let player: ApplicationMusicPlayer
     
     /// Queue of tracks to be played
     /// We maintain our own queue to have more control over track selection
-    private var trackQueue: [Track] = []
+    internal var trackQueue: [Track] = []
     
     /// Set to track Combine subscriptions
     private var cancellables = Set<AnyCancellable>()
@@ -97,7 +97,9 @@ final class MusicService: ObservableObject, MusicServiceProtocol {
     
     // MARK: - Initialization
     
-    init() {
+    init(musicKitManager: MusicKitManager = .shared, player: ApplicationMusicPlayer = .shared) {
+        self.musicKitManager = musicKitManager
+        self.player = player
         setupPlaybackObservers()
     }
     
@@ -383,26 +385,32 @@ final class MusicService: ObservableObject, MusicServiceProtocol {
                 // Strategy: Rebuild queue with [currentTrack, newNextTrack]
                 // This ensures queue size of 1 after current track
                 if let currentEntry = player.queue.currentEntry,
-                   let currentSong = currentEntry.item {
+                   let currentItem = currentEntry.item {
                     
                     // Store current playback time to restore position
                     let currentPlaybackTime = player.playbackTime
                     
-                    // Create new queue with only current + new next track
-                    player.queue = ApplicationMusicPlayer.Queue(
-                        for: [currentSong, musicTrack],
-                        startingAt: currentSong
-                    )
-                    
-                    // Restore playback position (MusicKit should preserve this)
-                    player.playbackTime = currentPlaybackTime
-                    
-                    // Resume playback if it was playing
-                    if self.playbackState == .playing {
-                        try await player.play()
+                    // Attempt to unwrap the current queue item as a Song
+                    if case let .song(currentSong) = currentItem {
+                        // Create new queue with only current + new next track using Songs
+                        player.queue = ApplicationMusicPlayer.Queue(
+                            for: [currentSong, musicTrack],
+                            startingAt: currentSong
+                        )
+                        
+                        // Restore playback position (MusicKit should preserve this)
+                        player.playbackTime = currentPlaybackTime
+                        
+                        // Resume playback if it was playing
+                        if self.playbackState == .playing {
+                            try await player.play()
+                        }
+                        
+                        print("♻️ Rebuilt queue: Current + 1 next track (size=2, queued=1)")
+                    } else {
+                        // Fallback: if the current item isn't a Song, insert after current entry
+                        try await player.queue.insert(musicTrack, position: .afterCurrentEntry)
                     }
-                    
-                    print("♻️ Rebuilt queue: Current + 1 next track (size=2, queued=1)")
                 } else {
                     // No current track, just insert normally
                     try await player.queue.insert(musicTrack, position: .afterCurrentEntry)
@@ -550,7 +558,7 @@ final class MusicService: ObservableObject, MusicServiceProtocol {
     /// - Parameter track: Our Track model to search for
     /// - Returns: MusicKit Song object
     /// - Throws: Error if track not found or search fails
-    private func searchForTrack(_ track: Track) async throws -> Song {
+    func searchForTrack(_ track: Track) async throws -> Song {
         // Create a search request for the track
         // We search by title and artist for best match
         let searchTerm = "\(track.title) \(track.artist)"

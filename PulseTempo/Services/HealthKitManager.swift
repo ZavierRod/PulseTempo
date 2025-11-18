@@ -19,7 +19,7 @@ import HealthKit   // Apple's health data framework
 // Similar to how you might create a DatabaseService or ExternalAPIClient
 
 /// Manages HealthKit authorization and configuration
-final class HealthKitManager {
+class HealthKitManager {
     
     // SINGLETON PATTERN
     // "static let shared" creates a single instance shared across the app
@@ -41,7 +41,8 @@ final class HealthKitManager {
     // PRIVATE PROPERTIES
     // HKHealthStore is Apple's interface to health data
     // Like a database connection or API client in Python
-    private let healthStore = HKHealthStore()
+    private let healthStore: HKHealthStore
+    private let healthDataAvailable: () -> Bool
     
     // PRIVATE INITIALIZER
     // Prevents creating instances with HealthKitManager()
@@ -51,7 +52,10 @@ final class HealthKitManager {
     // def __init__(self):
     //     # Make constructor private (not directly possible in Python)
     //     pass
-    private init() {}
+    init(healthStore: HKHealthStore = HKHealthStore(), healthDataAvailable: @escaping () -> Bool = { HKHealthStore.isHealthDataAvailable() }) {
+        self.healthStore = healthStore
+        self.healthDataAvailable = healthDataAvailable
+    }
     
     // COMPUTED PROPERTY: isHealthKitAvailable
     // Checks if HealthKit is available on this device
@@ -63,7 +67,7 @@ final class HealthKitManager {
     //     return HKHealthStore.is_health_data_available()
     /// Check if HealthKit is available on this device
     var isHealthKitAvailable: Bool {
-        return HKHealthStore.isHealthDataAvailable()
+        return healthDataAvailable()
     }
     
     // COMPUTED PROPERTY: typesToRead
@@ -193,7 +197,7 @@ final class HealthKitManager {
 //             ...
 //         }
 //         return descriptions.get(self.error_type)
-enum HealthKitError: LocalizedError {
+enum HealthKitError: LocalizedError, Equatable {
     // ERROR CASES (the possible error types)
     case notAvailable           // HealthKit not supported on device
     case authorizationDenied    // User denied permission

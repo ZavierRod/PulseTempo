@@ -24,7 +24,7 @@ import UIKit
 ///     }
 /// }
 /// ```
-final class MusicKitManager {
+class MusicKitManager {
     
     // MARK: - Singleton
     
@@ -35,7 +35,17 @@ final class MusicKitManager {
     // MARK: - Initialization
     
     /// Private initializer to enforce singleton pattern
-    private init() {}
+    private let authorizationRequester: () async -> MusicAuthorization.Status
+    private let statusProvider: () -> MusicAuthorization.Status
+    private let subscriptionProvider: () async throws -> MusicSubscription
+
+    init(authorizationRequester: @escaping () async -> MusicAuthorization.Status = { await MusicAuthorization.request() },
+         statusProvider: @escaping () -> MusicAuthorization.Status = { MusicAuthorization.currentStatus },
+         subscriptionProvider: @escaping () async throws -> MusicSubscription = { try await MusicSubscription.current }) {
+        self.authorizationRequester = authorizationRequester
+        self.statusProvider = statusProvider
+        self.subscriptionProvider = subscriptionProvider
+    }
     
     // MARK: - Authorization
     
@@ -50,7 +60,7 @@ final class MusicKitManager {
     func requestAuthorization(completion: @escaping (MusicAuthorization.Status) -> Void) {
         // Request authorization asynchronously
         Task {
-            let status = await MusicAuthorization.request()
+            let status = await authorizationRequester()
             completion(status)
         }
     }
@@ -62,7 +72,7 @@ final class MusicKitManager {
     ///
     /// - Returns: Current authorization status
     var authorizationStatus: MusicAuthorization.Status {
-        return MusicAuthorization.currentStatus
+        return statusProvider()
     }
     
     /// Check if the user is authorized to access Apple Music
@@ -92,7 +102,7 @@ final class MusicKitManager {
         
         // Check subscription status
         do {
-            let subscription = try await MusicSubscription.current
+            let subscription = try await subscriptionProvider()
             
             // Check if user can play catalog content (requires subscription)
             return subscription.canPlayCatalogContent

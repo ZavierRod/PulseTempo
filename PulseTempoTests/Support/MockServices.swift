@@ -59,6 +59,11 @@ final class MockMusicService: MusicServiceProtocol {
         play(track: track) { _ in }
     }
 
+    func replaceNext(track: Track) {
+        // Mock implementation - same as playNext for testing purposes
+        play(track: track) { _ in }
+    }
+
     func pause() {
         playbackStateSubject.send(.paused)
     }

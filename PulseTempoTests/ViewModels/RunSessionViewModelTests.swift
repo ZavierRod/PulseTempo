@@ -23,6 +23,8 @@ final class RunSessionViewModelTests: XCTestCase {
     }
 
     override func tearDown() {
+        // Ensure any running sessions are stopped to clean up timers/observers
+        viewModel?.stopRun()
         viewModel = nil
         mockMusicService = nil
         mockHeartRateService = nil

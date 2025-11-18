@@ -27,7 +27,7 @@ protocol HeartRateServiceProtocol: AnyObject {
 // receives data and updates subscribers
 
 /// Service for monitoring heart rate data during workouts
-final class HeartRateService: ObservableObject, HeartRateServiceProtocol {
+class HeartRateService: ObservableObject, HeartRateServiceProtocol {
     
     // ═══════════════════════════════════════════════════════════
     // PUBLISHED PROPERTIES (Observable State)
@@ -54,7 +54,7 @@ final class HeartRateService: ObservableObject, HeartRateServiceProtocol {
     // MARK: - Private Properties
     
     // Reference to the HealthKit manager singleton
-    private let healthKitManager = HealthKitManager.shared
+    private let healthKitManager: HealthKitManager
     
     // HEALTHKIT WORKOUT OBJECTS
     // These manage the workout session and data collection
@@ -86,7 +86,8 @@ final class HeartRateService: ObservableObject, HeartRateServiceProtocol {
     
     // Empty initializer (no setup needed yet)
     // Python equivalent: def __init__(self): pass
-    init() {
+    init(healthKitManager: HealthKitManager = .shared) {
+        self.healthKitManager = healthKitManager
         // Check if we should default to demo mode
         // (e.g., if HealthKit is not available)
         isDemoMode = !healthKitManager.isHealthKitAvailable
@@ -506,11 +507,15 @@ final class HeartRateService: ObservableObject, HeartRateServiceProtocol {
     ///     # ... etc
     ///     
     ///     self.current_heart_rate = int(base_hr)
-    private func updateDemoHeartRate() {
+    func updateDemoHeartRate(elapsedOverride: TimeInterval? = nil) {
+        if demoStartTime == nil && elapsedOverride != nil {
+            demoStartTime = Date()
+        }
+
         guard let startTime = demoStartTime else { return }
-        
+
         // Calculate elapsed time in seconds
-        let elapsed = Date().timeIntervalSince(startTime)
+        let elapsed = elapsedOverride ?? Date().timeIntervalSince(startTime)
         
         // Determine workout phase and calculate heart rate
         let baseHeartRate: Double
@@ -563,6 +568,11 @@ final class HeartRateService: ObservableObject, HeartRateServiceProtocol {
             self.currentHeartRate = max(60, min(200, finalHeartRate))  // Clamp to realistic range
         }
     }
+
+    /// Exposes the current demo workout phase for testing
+    var currentDemoPhase: WorkoutPhase {
+        demoWorkoutPhase
+    }
     
     /// Manually set heart rate in demo mode
     /// Useful for testing specific BPM ranges
@@ -571,6 +581,14 @@ final class HeartRateService: ObservableObject, HeartRateServiceProtocol {
     func setDemoHeartRate(_ bpm: Int) {
         guard isDemoMode else { return }
         currentHeartRate = max(60, min(200, bpm))  // Clamp to realistic range
+    }
+    
+    // MARK: - Deinitialization
+    
+    /// Clean up resources when service is deallocated
+    /// Ensures timers and queries are properly stopped to prevent memory issues
+    deinit {
+        stopMonitoring()
     }
 }
 
