@@ -11,6 +11,69 @@ This document outlines the complete development plan for taking PulseTempo from 
 
 ---
 
+## Product Vision
+
+### Core Concept
+PulseTempo is a workout music app that intelligently matches your music to your heart rate in real-time, creating a seamless flow state during runs and workouts.
+
+### How It Works
+
+#### 1. **Run Start**
+- User starts a workout session
+- App plays either:
+  - A random track from selected playlists, OR
+  - A user-chosen track
+- **Rationale**: User isn't warmed up yet, so BPM matching isn't critical at this stage
+
+#### 2. **During Workout (Continuous BPM Matching)**
+- App continuously monitors heart rate via Apple Watch
+- As HR changes, app intelligently selects the NEXT track that matches current HR
+- **Key Principle**: Never interrupt the currently playing song
+- Next track is queued and ready to play when:
+  - Current song ends naturally, OR
+  - User manually skips forward/backward
+
+#### 3. **Smart Track Selection Algorithm**
+When selecting the next track, the app scores each available track using:
+- **BPM Match (60% weight)**: How close is the track's BPM to current heart rate?
+- **Variety (20% weight)**: Avoid recently played tracks to keep workout fresh
+- **Energy (20% weight)**: Match HR zone to appropriate BPM range (e.g., high HR → high-energy tracks)
+
+#### 4. **User Experience Goals**
+- ✅ **Non-disruptive**: Songs never cut off mid-play
+- ✅ **Predictable**: Users know what to expect
+- ✅ **Flow state**: Music adapts to effort without breaking rhythm
+- ✅ **User control**: Can skip anytime, or let it play naturally
+- ✅ **Intelligent**: Learns from workout patterns and avoids repetition
+
+#### 5. **Future Enhancement: Cadence Matching** 🔮
+> **Note**: This feature will be implemented after the core HR-based matching is complete and tested.
+
+- **Concept**: Match music BPM to your running cadence (steps per minute)
+- **How it works**:
+  - Apple Watch tracks steps per minute during run
+  - App selects tracks with BPM matching your cadence
+  - Same queue-based, non-disruptive approach as HR matching
+- **User choice**: Toggle between HR matching mode or Cadence matching mode
+- **Advanced option**: Hybrid mode that considers both HR and cadence
+- **Use case**: Runners who want music rhythm to match their footstrike pattern
+- **Benefits**:
+  - Natural synchronization between movement and music
+  - Can help maintain consistent running pace
+  - Different workout feel compared to HR-based matching
+
+### Key Differentiators
+1. **Queue-based matching** (not mid-song interruption)
+2. **Real-time HR monitoring** with Apple Watch integration
+3. **Smart scoring algorithm** (not just simple BPM matching)
+4. **Workout-aware** (understands warm-up, steady state, cool-down)
+5. **Demo mode** for development/testing without Apple Watch
+6. **Dual matching modes** (future): HR-based OR Cadence-based matching
+
+
+
+---
+
 ## **Phase 1: Core iOS Foundation** (2-3 weeks)
 
 ### 1.1 Service Layer Architecture
@@ -154,9 +217,11 @@ Home Screen
 
 ---
 
-## **Phase 1.4: Comprehensive Testing** (1 week)
+## **Phase 1.4: Comprehensive Testing** (1 week) 🔄 **IN PROGRESS**
 
 > **Critical:** All Phase 1 features must be thoroughly tested before proceeding to Phase 2 (Backend). This ensures a stable foundation for backend integration.
+
+> **Current Status (Nov 18, 2024):** ✅ 15 tests passing - Core RunSessionViewModel track navigation bugs fixed. Now expanding test coverage for remaining services and view models.
 
 ### Testing Strategy
 
@@ -164,74 +229,80 @@ Home Screen
 Test individual components and business logic in isolation.
 
 **Service Layer Tests:**
-- `HeartRateService` - Mock heart rate data, test monitoring start/stop
-- `MusicService` - Mock MusicKit, test playback controls, queue management
-- `HealthKitManager` - Test authorization flow, permission handling
-- `MusicKitManager` - Test authorization flow
-- `PlaylistStorageManager` - Test save/load/clear operations
+- `HeartRateService` - Mock heart rate data, test monitoring start/stop ⏳ TODO
+- `MusicService` - Mock MusicKit, test playback controls, queue management ⏳ TODO
+- `HealthKitManager` - Test authorization flow, permission handling ⏳ TODO
+- `MusicKitManager` - Test authorization flow ⏳ TODO
+- `PlaylistStorageManager` - Test save/load/clear operations ✅ COMPLETE (4 tests)
 
 **View Model Tests:**
-- `RunSessionViewModel` - Test track selection, BPM matching, state transitions
-  - **Critical:** Test rapid skip forward/backward scenarios
-  - Test `tracksPlayed` array management
-  - Test `playedTrackIds` set management
-  - Test edge cases (no previous track, end of playlist)
-- `PlaylistSelectionViewModel` - Test playlist fetching, selection logic
-- `HomeViewModel` - Test playlist loading, track fetching
+- `RunSessionViewModel` - ⚠️ PARTIAL (5 tests - navigation only, BPM matching NOT tested)
+  - ✅ Test rapid skip forward/backward scenarios
+  - ✅ Test `tracksPlayed` array management
+  - ✅ Test `playedTrackIds` set management
+  - ✅ Test edge cases (no previous track, end of playlist)
+  - ❌ Test BPM-based track selection algorithm ⏳ TODO
+  - ❌ Test BPM scoring/weighting (60% BPM, 20% variety, 20% energy) ⏳ TODO
+  - ❌ Test next track selection updates based on HR changes ⏳ TODO
+  - ❌ Test initial track selection (random/default at run start) ⏳ TODO
+  - ❌ Test that current song is never interrupted ⏳ TODO
+- `PlaylistSelectionViewModel` - Test playlist fetching, selection logic ⏳ TODO
+- `HomeViewModel` - Test playlist loading, track fetching ✅ COMPLETE (3 tests)
 
-**Files to create:**
+**Files created/to create:**
 ```
 PulseTempoTests/
 ├── Services/
-│   ├── HeartRateServiceTests.swift
-│   ├── MusicServiceTests.swift
-│   ├── HealthKitManagerTests.swift
-│   ├── MusicKitManagerTests.swift
-│   └── PlaylistStorageManagerTests.swift
+│   ├── HeartRateServiceTests.swift ⏳ TODO
+│   ├── MusicServiceTests.swift ⏳ TODO
+│   ├── HealthKitManagerTests.swift ⏳ TODO
+│   ├── MusicKitManagerTests.swift ⏳ TODO
+│   └── PlaylistStorageManagerTests.swift ✅ CREATED
 ├── ViewModels/
-│   ├── RunSessionViewModelTests.swift
-│   ├── PlaylistSelectionViewModelTests.swift
-│   └── HomeViewModelTests.swift
+│   ├── RunSessionViewModelTests.swift ✅ CREATED
+│   ├── PlaylistSelectionViewModelTests.swift ⏳ TODO
+│   └── HomeViewModelTests.swift ✅ CREATED
 └── Models/
-    └── ModelsTests.swift
+    └── ModelsTests.swift ⏳ TODO
 ```
 
 #### Integration Tests
 Test how components work together.
 
 **Key Integration Flows:**
-- Onboarding flow (Welcome → HealthKit → MusicKit → Playlist Selection → Home)
-- Playlist selection and persistence
-- Track fetching and workout initialization
-- Music playback and heart rate monitoring coordination
+- Onboarding flow (Welcome → HealthKit → MusicKit → Playlist Selection → Home) ✅ PARTIAL (1 test)
+- Playlist selection and persistence ✅ COMPLETE (2 tests)
+- Track fetching and workout initialization ✅ COMPLETE (1 test)
+- Music playback and heart rate monitoring coordination ⏳ TODO
 
-**Files to create:**
+**Files created/to create:**
 ```
 PulseTempoTests/Integration/
-├── OnboardingFlowTests.swift
-├── PlaylistPersistenceTests.swift
-├── WorkoutFlowTests.swift
-└── MusicPlaybackIntegrationTests.swift
+├── IntegrationFlowTests.swift ✅ CREATED (3 tests: onboarding, workout flow, persistence)
+├── OnboardingFlowTests.swift ⏳ TODO (dedicated onboarding tests)
+├── PlaylistPersistenceTests.swift ⏳ TODO (dedicated persistence tests)
+├── WorkoutFlowTests.swift ⏳ TODO (dedicated workout tests)
+└── MusicPlaybackIntegrationTests.swift ⏳ TODO
 ```
 
 #### UI Tests
 Test user interactions and navigation flows.
 
 **Critical User Journeys:**
-1. Complete onboarding as new user
-2. Select playlists and start workout
-3. Control music playback during workout
-4. Navigate between screens
-5. Manage playlist selections from Home
+1. Complete onboarding as new user ⏳ TODO
+2. Select playlists and start workout ⏳ TODO
+3. Control music playback during workout ⏳ TODO
+4. Navigate between screens ⏳ TODO
+5. Manage playlist selections from Home ⏳ TODO
 
 **Files to create:**
 ```
 PulseTempoUITests/
-├── OnboardingUITests.swift
-├── HomeScreenUITests.swift
-├── PlaylistSelectionUITests.swift
-├── ActiveRunUITests.swift
-└── NavigationUITests.swift
+├── OnboardingUITests.swift ⏳ TODO
+├── HomeScreenUITests.swift ⏳ TODO
+├── PlaylistSelectionUITests.swift ⏳ TODO
+├── ActiveRunUITests.swift ⏳ TODO
+└── NavigationUITests.swift ⏳ TODO
 ```
 
 #### Manual Testing Checklist
@@ -316,13 +387,15 @@ Add logging - Track state changes for debugging
 ### Success Criteria
 
 Before moving to Phase 2, ensure:
-- [ ] 80%+ code coverage for critical paths
-- [ ] All unit tests passing
-- [ ] All integration tests passing
-- [ ] All UI tests passing
-- [ ] Manual testing checklist 100% complete
-- [ ] No critical bugs
+- [ ] 80%+ code coverage for critical paths (Currently: ~40% estimated)
+- [x] All unit tests passing (15/15 tests passing ✅)
+- [x] Critical integration tests passing (3/3 tests passing ✅)
+- [ ] All UI tests passing (0 UI tests created yet)
+- [ ] Manual testing checklist 100% complete (Not started)
+- [x] No critical bugs (Track navigation bugs fixed ✅)
 - [ ] Performance is acceptable (no UI lag, smooth animations)
+
+**Current Progress:** 15 tests passing | ~40% Phase 1.4 complete | Ready to expand test coverage
 
 ---
 
@@ -465,16 +538,27 @@ backend/
 
 ### 3.2 BPM Matching Algorithm
 
-#### Smart Selection Logic
-- Define BPM tolerance ranges based on run mode
+#### Queue-Based Smart Selection Logic
+
+**Core Behavior:**
+- **Initial Track**: Random or user-selected track at run start (user not warmed up yet)
+- **Continuous Monitoring**: Constantly monitor HR and update next queued track
+- **Non-Disruptive**: Only queue next track
+- **Transition Points**: Apply BPM-matched track when:
+  - Current song ends naturally
+  - User manually skips forward
+  - User manually skips backward (goes to previous track)
+
+**Smart Selection Logic:**
 - Implement track history to avoid repetition
 - Add energy/intensity scoring beyond just BPM
 - Consider song transitions (avoid jarring changes)
+- Update queue in real-time as HR changes during current song
 
 **Scoring Components:**
-- BPM Match (60% weight)
-- Variety (20% weight)
-- Energy (20% weight)
+- BPM Match (60% weight) - Closer to current HR = higher score
+- Variety (20% weight) - Penalize recently played tracks
+- Energy (20% weight) - Match HR zone to appropriate BPM range
 
 **Files to create:**
 - `PulseTempo/Services/TrackSelectionService.swift`
@@ -644,6 +728,31 @@ PulseTempoWatch/
 - Crash reporting and error tracking
 
 ### 7.2 Feature Enhancements
+
+#### Cadence Matching Mode (Priority #1)
+**Timeline:** 2-3 weeks post-launch
+**Implementation:**
+- Add cadence tracking via Apple Watch pedometer data
+- Create `CadenceService` to monitor steps per minute
+- Extend BPM matching algorithm to work with cadence instead of HR
+- Add settings toggle: "Match music to: Heart Rate / Cadence / Hybrid"
+- Update `RunSessionViewModel` to support multiple matching modes
+- Test cadence accuracy across different running speeds
+**User Flow:**
+- Settings screen: Choose matching mode (HR, Cadence, or Hybrid)
+- During run: App matches track BPM to current cadence (e.g., 180 SPM → 180 BPM track)
+- Same queue-based approach: never interrupt current song
+- Display both HR and cadence metrics on run screen
+**Files to create:**
+- `PulseTempo/Services/CadenceService.swift`
+- `PulseTempo/Models/MatchingMode.swift`
+- Update `RunSessionViewModel` with mode switching logic
+**Success Metrics:**
+- Cadence tracking accuracy within ±2 SPM
+- Smooth mode switching without disrupting playback
+- User preference data (which mode is most popular)
+
+#### Other Enhancements
 - Spotify integration
 - Social features (share runs)
 - Custom workout programs
@@ -786,5 +895,5 @@ PulseTempoWatch/
 
 ---
 
-**Last Updated:** November 5, 2025
-**Version:** 1.1 - Added Demo Mode strategy for development without Apple Watch
+**Last Updated:** November 18, 2024
+**Version:** 1.2 - Updated Phase 1.4 testing progress: 15 tests passing, expanding coverage for remaining services and view models

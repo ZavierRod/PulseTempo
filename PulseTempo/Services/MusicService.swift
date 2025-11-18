@@ -16,6 +16,7 @@ protocol MusicServiceProtocol: AnyObject {
     func play(track: Track, completion: @escaping (Result<Void, Error>) -> Void)
     func playQueue(tracks: [Track], startIndex: Int, completion: @escaping (Result<Void, Error>) -> Void)
     func playNext(track: Track)
+    func replaceNext(track: Track)
     func pause()
     func resume()
     func stop()
@@ -352,6 +353,73 @@ final class MusicService: ObservableObject, MusicServiceProtocol {
             } catch {
                 await MainActor.run {
                     self.error = error
+                }
+            }
+        }
+    }
+    
+    /// Replace the next queued track (ensures queue size of 1)
+    ///
+    /// This method ensures only ONE track is queued after the current playing track.
+    /// It clears any previously queued tracks and queues the new one.
+    /// Use this for dynamic HR-based track selection during workouts.
+    ///
+    /// **Implementation Note:**
+    /// MusicKit doesn't provide a direct way to remove queue entries, so we rebuild
+    /// the queue as [currentTrack, newNextTrack]. This ensures queue size stays at 1
+    /// after the current track. Playback position is preserved to minimize disruption.
+    ///
+    /// **Trade-off:**
+    /// Rebuilding may cause a brief audio hiccup. To minimize this, only call when
+    /// the desired next track actually changes (guard against repeated calls).
+    ///
+    /// - Parameter track: Track to queue as the only next track
+    @MainActor
+    func replaceNext(track: Track) {
+        Task {
+            do {
+                let musicTrack = try await searchForTrack(track)
+                
+                // Strategy: Rebuild queue with [currentTrack, newNextTrack]
+                // This ensures queue size of 1 after current track
+                if let currentEntry = player.queue.currentEntry,
+                   let currentSong = currentEntry.item {
+                    
+                    // Store current playback time to restore position
+                    let currentPlaybackTime = player.playbackTime
+                    
+                    // Create new queue with only current + new next track
+                    player.queue = ApplicationMusicPlayer.Queue(
+                        for: [currentSong, musicTrack],
+                        startingAt: currentSong
+                    )
+                    
+                    // Restore playback position (MusicKit should preserve this)
+                    player.playbackTime = currentPlaybackTime
+                    
+                    // Resume playback if it was playing
+                    if self.playbackState == .playing {
+                        try await player.play()
+                    }
+                    
+                    print("♻️ Rebuilt queue: Current + 1 next track (size=2, queued=1)")
+                } else {
+                    // No current track, just insert normally
+                    try await player.queue.insert(musicTrack, position: .afterCurrentEntry)
+                }
+                
+                await MainActor.run {
+                    // Update our internal queue - keep only current track + new next
+                    if let currentTrack = self.currentTrack {
+                        self.trackQueue = [currentTrack, track]
+                    } else {
+                        self.trackQueue = [track]
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    self.error = error
+                    print("❌ Error replacing next track: \(error.localizedDescription)")
                 }
             }
         }

@@ -84,6 +84,10 @@ final class RunSessionViewModel: ObservableObject {
         case next
         case previous
     }
+    
+    // NEXT TRACK QUEUE MANAGEMENT
+    // Per ROADMAP: intelligently select ONE next track that updates as HR changes
+    private var queuedNextTrack: Track?          // The track queued to play next
 
     private var lastSkipTimestamps: [NavigationDirection: Date] = [:]
     private let skipDebounceInterval: TimeInterval = 0.3
@@ -258,6 +262,8 @@ final class RunSessionViewModel: ObservableObject {
     
     /// Start the run session
     /// Begins heart rate monitoring and music playback
+    /// Per ROADMAP: User starts workout, app plays either random track or user-chosen track
+    /// BPM matching isn't critical at start since user isn't warmed up yet
     ///
     /// Python equivalent:
     /// def start_run(self):
@@ -281,6 +287,7 @@ final class RunSessionViewModel: ObservableObject {
         playedTrackIds.removeAll()
         tracksPlayed.removeAll()
         tracksPlayedInternal.removeAll()
+        queuedNextTrack = nil  // Clear queued track
         
         // Start heart rate monitoring
         // Check if we should use demo mode (no Apple Watch available)
@@ -370,7 +377,8 @@ final class RunSessionViewModel: ObservableObject {
     }
     
     /// Skip to next track
-    /// Manually skip to the next track (uses current or provided heart rate for selection)
+    /// Per ROADMAP: User manually skips forward - this is one of two ways queued track plays
+    /// (The other is when current song ends naturally)
     /// - Parameter approximateHeartRate: Optional heart rate to use for track selection (defaults to current heart rate)
     func skipToNextTrack(approximateHeartRate: Int? = nil) {
         navigationQueue.async { [weak self] in
@@ -381,10 +389,14 @@ final class RunSessionViewModel: ObservableObject {
             let targetHeartRate = approximateHeartRate ?? self.currentHeartRate
             let nextTrack = self.selectTrackForHeartRate(targetHeartRate)
             self.playTrack(nextTrack)
+            
+            // Clear queued track since we're manually navigating
+            self.queuedNextTrack = nil
         }
     }
     
     /// Skip to previous track
+    /// Per ROADMAP: User manually skips backward
     /// Goes back to the previously played track in the session
     func skipToPreviousTrack() {
         navigationQueue.async { [weak self] in
@@ -405,6 +417,9 @@ final class RunSessionViewModel: ObservableObject {
             updatedPlayedIds.remove(previousTrack.id)
 
             self.playTrack(previousTrack, historyBaseline: updatedHistory, playedIdsBaseline: updatedPlayedIds)
+            
+            // Clear queued track since we're manually navigating
+            self.queuedNextTrack = nil
         }
     }
     
@@ -414,6 +429,7 @@ final class RunSessionViewModel: ObservableObject {
     // MARK: - Heart Rate Handling
     
     /// Called when heart rate changes - implements smart track selection
+    /// Per ROADMAP: Continuously monitors HR and intelligently selects NEXT track
     private func onHeartRateChanged(_ heartRate: Int) {
         currentHeartRate = heartRate
         
@@ -430,21 +446,38 @@ final class RunSessionViewModel: ObservableObject {
             averageHeartRate = heartRateSamples.reduce(0, +) / heartRateSamples.count
         }
         
-        // Check if track change needed
-        checkTrackChangeNeeded(heartRate)
+        // Update queued next track based on HR changes
+        // Per ROADMAP: Never interrupt current song, queue intelligently updates
+        updateQueuedNextTrack(heartRate)
     }
     
-    /// Check if current track BPM matches heart rate
-    private func checkTrackChangeNeeded(_ heartRate: Int) {
-        guard let track = currentTrack, let trackBPM = track.bpm else { return }
+    /// Update the queued next track based on current heart rate
+    /// Per ROADMAP: App intelligently selects the NEXT track that matches current HR
+    /// Key Principle: Never interrupt the currently playing song
+    /// Next track plays when: (1) current song ends naturally, OR (2) user manually skips
+    ///
+    /// Example: HR at 160 → queue 160 BPM song. HR changes to 140 → REPLACE with 140 BPM song.
+    private func updateQueuedNextTrack(_ heartRate: Int) {
+        // Select the best track for current heart rate
+        let bestMatchTrack = selectTrackForHeartRate(heartRate)
         
-        let bpmDifference = abs(trackBPM - heartRate)
-        let tolerance = getBPMTolerance()
-        
-        if bpmDifference > tolerance {
-            let betterTrack = selectTrackForHeartRate(heartRate)
-            musicService.playNext(track: betterTrack)
+        // Only update queue if it's different from what's already queued
+        // This prevents repeatedly queueing the same track
+        guard queuedNextTrack?.id != bestMatchTrack.id else {
+            return
         }
+        
+        // Update our internal queue state
+        let hadPreviouslyQueuedTrack = queuedNextTrack != nil
+        queuedNextTrack = bestMatchTrack
+        
+        // Replace the queued track (ensures queue size of 1)
+        // If there was a previously queued track, this replaces it
+        // If not, this queues the first track
+        musicService.replaceNext(track: bestMatchTrack)
+        
+        let action = hadPreviouslyQueuedTrack ? "Replaced" : "Queued"
+        print("🎵 \(action) next track: \(bestMatchTrack.title) (\(bestMatchTrack.bpm ?? 0) BPM) for HR: \(heartRate)")
     }
     
     /// Get BPM tolerance based on run mode
@@ -487,7 +520,8 @@ final class RunSessionViewModel: ObservableObject {
         let bpmScore = max(0, 1 - Double(bpmDifference) / 50.0)
         
         // Variety score (20% weight)
-        let varietyScore = 1.0
+        // let varietyScore = 1.0
+        let varietyScore = playedTrackIds.contains(track.id) ? 0.5 : 1.0
         
         // Energy score (20% weight)
         let energyScore = calculateEnergyScore(trackBPM: trackBPM, heartRate: heartRate)
