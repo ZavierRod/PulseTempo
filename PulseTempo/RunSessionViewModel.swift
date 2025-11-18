@@ -80,7 +80,12 @@ final class RunSessionViewModel: ObservableObject {
     private var playedTrackIds: Set<String> = [] // Track IDs already played (avoid repetition)
     private var tracksPlayedInternal: [Track] = [] // Internal copy for navigationQueue access
     private let navigationQueue = DispatchQueue(label: "RunSessionViewModel.navigationQueue")
-    private var lastSkipTimestamp: Date?
+    private enum NavigationDirection {
+        case next
+        case previous
+    }
+
+    private var lastSkipTimestamps: [NavigationDirection: Date] = [:]
     private let skipDebounceInterval: TimeInterval = 0.3
 
     var playedTrackIdsSnapshot: Set<String> {
@@ -370,7 +375,7 @@ final class RunSessionViewModel: ObservableObject {
     func skipToNextTrack(approximateHeartRate: Int? = nil) {
         navigationQueue.async { [weak self] in
             guard let self else { return }
-            guard self.allowNavigationAction() else { return }
+            guard self.allowNavigationAction(.next) else { return }
             guard !self.tracks.isEmpty else { return }
 
             let targetHeartRate = approximateHeartRate ?? self.currentHeartRate
@@ -384,7 +389,7 @@ final class RunSessionViewModel: ObservableObject {
     func skipToPreviousTrack() {
         navigationQueue.async { [weak self] in
             guard let self else { return }
-            guard self.allowNavigationAction() else { return }
+            guard self.allowNavigationAction(.previous) else { return }
 
             guard self.tracksPlayedInternal.count >= 2 else {
                 print("⚠️ No previous track available")
@@ -540,12 +545,12 @@ final class RunSessionViewModel: ObservableObject {
 
 // MARK: - Track State Management
 private extension RunSessionViewModel {
-    func allowNavigationAction() -> Bool {
+    private func allowNavigationAction(_ direction: NavigationDirection) -> Bool {
         let now = Date()
-        if let last = lastSkipTimestamp, now.timeIntervalSince(last) < skipDebounceInterval {
+        if let last = lastSkipTimestamps[direction], now.timeIntervalSince(last) < skipDebounceInterval {
             return false
         }
-        lastSkipTimestamp = now
+        lastSkipTimestamps[direction] = now
         return true
     }
 
