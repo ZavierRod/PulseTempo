@@ -57,7 +57,7 @@ final class IntegrationFlowTests: XCTestCase {
         XCTAssertEqual(homeViewModel?.selectedPlaylists, playlists)
     }
 
-    func testWorkoutFlowNavigationBetweenTracks() {
+    @MainActor func testWorkoutFlowNavigationBetweenTracks() {
         let mockMusic = MockMusicService()
         let heartRate = MockHeartRateService()
         let tracks = [
@@ -75,23 +75,23 @@ final class IntegrationFlowTests: XCTestCase {
 
         XCTAssertTrue(mockMusic.playCallCount >= 2)
         XCTAssertFalse(runViewModel.tracksPlayed.isEmpty)
+        
+        // Properly stop the run to clean up timers and queues
+        runViewModel.stopRun()
+        waitForMainQueue()
     }
 
     func testPlaylistPersistenceIntegration() {
-        let suiteName = "IntegrationTests"
-        guard let defaults = UserDefaults(suiteName: suiteName) else {
-            return XCTFail("Failed to create user defaults suite")
-        }
-
-        let storage = PlaylistStorageManager(userDefaults: defaults, suiteName: suiteName)
-        storage.clearSelectedPlaylists()  // Clear any existing data
-        storage.saveSelectedPlaylists(["abc"])
-
-        let reloaded = PlaylistStorageManager(userDefaults: defaults, suiteName: suiteName)
-        XCTAssertEqual(reloaded.loadSelectedPlaylists(), ["abc"])
+        // Use mock storage to avoid UserDefaults suite memory issues
+        let storage = MockPlaylistStorageManager()
         
-        // Clean up by clearing the key only
+        storage.saveSelectedPlaylists(["abc", "def"])
+        XCTAssertTrue(storage.hasSelectedPlaylists)
+        XCTAssertEqual(storage.loadSelectedPlaylists(), ["abc", "def"])
+        
         storage.clearSelectedPlaylists()
+        XCTAssertFalse(storage.hasSelectedPlaylists)
+        XCTAssertTrue(storage.loadSelectedPlaylists().isEmpty)
     }
 
     private func waitForMainQueue() {

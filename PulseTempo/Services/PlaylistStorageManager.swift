@@ -52,7 +52,7 @@ final class PlaylistStorageManager: PlaylistStorageManaging {
     
     /// Clear all saved playlist selections
     func clearSelectedPlaylists() {
-        // Only remove the specific key we own; avoid nuking the entire suite.
+        // Only remove the specific key we own; never remove the entire suite
         userDefaults.removeObject(forKey: StorageKey.selectedPlaylistIds)
         print("🗑️ Cleared saved playlist selections")
     }

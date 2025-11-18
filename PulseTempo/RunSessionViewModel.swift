@@ -26,6 +26,7 @@ import MusicKit    // Apple Music integration
 // - "final" = cannot be subclassed (like @final in Python 3.8+)
 // - "ObservableObject" = protocol that allows SwiftUI to watch for changes
 //   (like a reactive state manager - when properties change, UI auto-updates)
+@MainActor
 final class RunSessionViewModel: ObservableObject {
     
     // ═══════════════════════════════════════════════════════════
@@ -77,6 +78,7 @@ final class RunSessionViewModel: ObservableObject {
     private var tracks: [Track] = []             // All available tracks
     private var currentIndex: Int = 0            // Index of current track in the array
     private var playedTrackIds: Set<String> = [] // Track IDs already played (avoid repetition)
+    private var tracksPlayedInternal: [Track] = [] // Internal copy for navigationQueue access
     private let navigationQueue = DispatchQueue(label: "RunSessionViewModel.navigationQueue")
     private var lastSkipTimestamp: Date?
     private let skipDebounceInterval: TimeInterval = 0.3
@@ -273,6 +275,7 @@ final class RunSessionViewModel: ObservableObject {
         heartRateSamples.removeAll()
         playedTrackIds.removeAll()
         tracksPlayed.removeAll()
+        tracksPlayedInternal.removeAll()
         
         // Start heart rate monitoring
         // Check if we should use demo mode (no Apple Watch available)
@@ -296,7 +299,7 @@ final class RunSessionViewModel: ObservableObject {
             queueTrackForPlayback(initialTrack, historyBaseline: [])
         }
         
-        // Start timer for elapsed time
+        // Timer scheduled on main runloop because RunSessionViewModel is @MainActor
         runTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.updateElapsedTime()
         }
@@ -318,7 +321,7 @@ final class RunSessionViewModel: ObservableObject {
         isPlaying = true  // Update UI immediately
         musicService.resume()
         
-        // Restart elapsed time timer
+        // Timer scheduled on main runloop because RunSessionViewModel is @MainActor
         runTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.updateElapsedTime()
         }
@@ -383,12 +386,12 @@ final class RunSessionViewModel: ObservableObject {
             guard let self else { return }
             guard self.allowNavigationAction() else { return }
 
-            guard self.tracksPlayed.count >= 2 else {
+            guard self.tracksPlayedInternal.count >= 2 else {
                 print("⚠️ No previous track available")
                 return
             }
 
-            var updatedHistory = self.tracksPlayed
+            var updatedHistory = self.tracksPlayedInternal
             let current = updatedHistory.removeLast()
             let previousTrack = updatedHistory.removeLast()
 
@@ -523,6 +526,16 @@ final class RunSessionViewModel: ObservableObject {
         // Could add more complex metrics here
         print("📊 Run completed - Avg HR: \(averageHeartRate), Max HR: \(maxHeartRate), Duration: \(Int(elapsedTime))s")
     }
+    
+    deinit {
+        // Ensure timers and services are stopped on deallocation to avoid runloop callbacks
+        runTimer?.invalidate()
+        runTimer = nil
+        // Defensive: stop services in case stopRun() wasn't called
+        heartRateService.stopMonitoring()
+        musicService.stop()
+        cancellables.removeAll()
+    }
 }
 
 // MARK: - Track State Management
@@ -539,7 +552,7 @@ private extension RunSessionViewModel {
     func recordTrackFromService(_ track: Track) {
         navigationQueue.async { [weak self] in
             guard let self else { return }
-            var updatedHistory = self.tracksPlayed
+            var updatedHistory = self.tracksPlayedInternal
             if updatedHistory.last?.id != track.id {
                 updatedHistory.append(track)
             }
@@ -547,18 +560,14 @@ private extension RunSessionViewModel {
             var updatedIds = self.playedTrackIds
             updatedIds.insert(track.id)
 
-            DispatchQueue.main.async {
-                self.tracksPlayed = updatedHistory
-                self.playedTrackIds = updatedIds
-                self.currentTrack = track
-            }
+            self.dispatchStateUpdate(track: track, history: updatedHistory, playedIds: updatedIds)
         }
     }
 
     func queueTrackForPlayback(_ track: Track, historyBaseline: [Track]?) {
         navigationQueue.async { [weak self] in
             guard let self else { return }
-            var updatedHistory = historyBaseline ?? self.tracksPlayed
+            var updatedHistory = historyBaseline ?? self.tracksPlayedInternal
             updatedHistory.append(track)
             var updatedIds = self.playedTrackIds
             updatedIds.insert(track.id)
@@ -575,7 +584,7 @@ private extension RunSessionViewModel {
     }
 
     func playTrack(_ track: Track, historyBaseline: [Track]? = nil, playedIdsBaseline: Set<String>? = nil) {
-        var updatedHistory = historyBaseline ?? tracksPlayed
+        var updatedHistory = historyBaseline ?? tracksPlayedInternal
         updatedHistory.append(track)
         var updatedIds = playedIdsBaseline ?? playedTrackIds
         updatedIds.insert(track.id)
@@ -591,10 +600,26 @@ private extension RunSessionViewModel {
     }
 
     func dispatchStateUpdate(track: Track, history: [Track], playedIds: Set<String>) {
+        // Update internal state on navigation queue
+        tracksPlayedInternal = history
+        playedTrackIds = playedIds
+        
+        // Update published properties on main queue for UI
         DispatchQueue.main.async {
             self.tracksPlayed = history
-            self.playedTrackIds = playedIds
             self.currentTrack = track
         }
     }
+    
+    // MARK: - Test Helpers
+    
+    /// Flush the navigation queue - for testing only
+    internal func flushNavigationQueue(completion: @escaping () -> Void) {
+        navigationQueue.async {
+            DispatchQueue.main.async {
+                completion()
+            }
+        }
+    }
 }
+

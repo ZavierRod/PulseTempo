@@ -1,6 +1,7 @@
 import XCTest
 @testable import PulseTempo
 
+@MainActor
 final class RunSessionViewModelTests: XCTestCase {
     private var mockMusicService: MockMusicService!
     private var mockHeartRateService: MockHeartRateService!
@@ -36,9 +37,13 @@ final class RunSessionViewModelTests: XCTestCase {
         viewModel.skipToNextTrack()
         waitForQueueFlush()
 
+        let lastPlayedVMId = viewModel.tracksPlayed.last?.id
+        let lastPlayedServiceId = mockMusicService.playedTracks.last?.id
+        let containsLastPlayedServiceId = lastPlayedServiceId.map { viewModel.playedTrackIdsSnapshot.contains($0) } ?? false
+
         XCTAssertEqual(mockMusicService.playCallCount, 2, "Initial play + next skip should trigger two play calls")
-        XCTAssertEqual(viewModel.tracksPlayed.last?.id, mockMusicService.playedTracks.last?.id)
-        XCTAssertTrue(viewModel.playedTrackIdsSnapshot.contains(mockMusicService.playedTracks.last!.id))
+        XCTAssertEqual(lastPlayedVMId, lastPlayedServiceId)
+        XCTAssertTrue(containsLastPlayedServiceId)
     }
 
     func testSkipToPreviousTrackWithRapidCallsDebounces() {
@@ -53,16 +58,21 @@ final class RunSessionViewModelTests: XCTestCase {
         viewModel.skipToPreviousTrack()
         waitForQueueFlush()
 
+        let currentTrackId = viewModel.currentTrack?.id
+        let lastPlayedId = viewModel.tracksPlayed.last?.id
+
         XCTAssertEqual(mockMusicService.playCallCount, initialPlayCount + 1, "Debounce should block back-to-back previous calls")
-        XCTAssertEqual(viewModel.currentTrack?.id, trackA.id)
-        XCTAssertEqual(viewModel.tracksPlayed.last?.id, trackA.id)
+        XCTAssertEqual(currentTrackId, trackA.id)
+        XCTAssertEqual(lastPlayedId, trackA.id)
     }
 
     func testTrackHistoryManagementPreventsCrashesOnInsufficientHistory() {
         viewModel.skipToPreviousTrack()
         waitForQueueFlush()
 
-        XCTAssertTrue(viewModel.tracksPlayed.isEmpty)
+        let isHistoryEmpty = viewModel.tracksPlayed.isEmpty
+
+        XCTAssertTrue(isHistoryEmpty)
         XCTAssertEqual(mockMusicService.playCallCount, 0)
     }
 
@@ -75,7 +85,10 @@ final class RunSessionViewModelTests: XCTestCase {
         viewModel.skipToNextTrack(approximateHeartRate: 50)
         waitForQueueFlush()
 
-        XCTAssertLessThanOrEqual(viewModel.playedTrackIdsSnapshot.count, viewModel.tracksPlayed.count)
+        let playedIdsCount = viewModel.playedTrackIdsSnapshot.count
+        let tracksPlayedCount = viewModel.tracksPlayed.count
+
+        XCTAssertLessThanOrEqual(playedIdsCount, tracksPlayedCount)
     }
 
     func testStateSynchronizationWhenGoingBack() {
@@ -87,16 +100,21 @@ final class RunSessionViewModelTests: XCTestCase {
         viewModel.skipToPreviousTrack()
         waitForQueueFlush()
 
-        XCTAssertEqual(viewModel.currentTrack?.id, trackA.id)
-        XCTAssertEqual(viewModel.tracksPlayed.last?.id, trackA.id)
-        XCTAssertTrue(viewModel.playedTrackIdsSnapshot.contains(trackA.id))
+        let currentTrackId2 = viewModel.currentTrack?.id
+        let lastPlayedId2 = viewModel.tracksPlayed.last?.id
+        let containsTrackA = viewModel.playedTrackIdsSnapshot.contains(trackA.id)
+
+        XCTAssertEqual(currentTrackId2, trackA.id)
+        XCTAssertEqual(lastPlayedId2, trackA.id)
+        XCTAssertTrue(containsTrackA)
     }
 
     private func waitForQueueFlush(file: StaticString = #file, line: UInt = #line) {
         let expectation = expectation(description: "waitForQueueFlush")
-        DispatchQueue.main.async {
+        viewModel.flushNavigationQueue {
             expectation.fulfill()
         }
         wait(for: [expectation], timeout: 1.0)
     }
 }
+
