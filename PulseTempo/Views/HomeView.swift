@@ -62,14 +62,14 @@ struct HomeView: View {
                 }
             }
             .navigationTitle("PulseTempo")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
                         // TODO: Open settings
                     }) {
                         Image(systemName: "gear")
-                            .foregroundColor(.primary)
+                            .foregroundColor(.black)
                     }
                 }
             }
@@ -105,12 +105,12 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Ready to Work Out")
                     .font(.system(size: 28, weight: .bold, design: .rounded))
-                    .foregroundColor(.primary)
+                    .foregroundColor(.black)
                 
                 if viewModel.totalTrackCount > 0 {
                     Text("\(viewModel.totalTrackCount) songs ready")
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.gray)
                 }
             }
             

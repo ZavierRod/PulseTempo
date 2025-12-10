@@ -10,6 +10,19 @@ import Foundation
 
 @main
 struct PulseTempoApp: App {
+    init() {
+        // Configure navigation bar appearance to fix text colors
+        let appearance = UINavigationBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = .clear
+        appearance.largeTitleTextAttributes = [.foregroundColor: UIColor.label]
+        appearance.titleTextAttributes = [.foregroundColor: UIColor.label]
+        
+        UINavigationBar.appearance().standardAppearance = appearance
+        UINavigationBar.appearance().scrollEdgeAppearance = appearance
+        UINavigationBar.appearance().compactAppearance = appearance
+    }
+    
     var body: some Scene {
         WindowGroup {
             AppCoordinator()
@@ -58,5 +71,6 @@ struct AppCoordinator: View {
                 )
             }
         }
+        .preferredColorScheme(.light) // Force light mode to fix text visibility
     }
 }
