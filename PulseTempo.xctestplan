@@ -1,0 +1,38 @@
+{
+  "configurations" : [
+    {
+      "id" : "8C90B6E4-F3CA-4956-817C-1247AAC31AF9",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "performanceAntipatternCheckerEnabled" : true,
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:PulseTempo.xcodeproj",
+      "identifier" : "D0C492A02EBAD91B006A0DAA",
+      "name" : "PulseTempo"
+    }
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:PulseTempo.xcodeproj",
+        "identifier" : "D0C492AD2EBAD91E006A0DAA",
+        "name" : "PulseTempoTests"
+      }
+    },
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:PulseTempo.xcodeproj",
+        "identifier" : "D0C492B72EBAD91E006A0DAA",
+        "name" : "PulseTempoUITests"
+      }
+    }
+  ],
+  "version" : 1
+}

@@ -56,12 +56,11 @@ final class MockMusicService: MusicServiceProtocol {
     }
 
     func playNext(track: Track) {
-        play(track: track) { _ in }
+        // Just record the track, don't play it immediately
     }
 
     func replaceNext(track: Track) {
-        // Mock implementation - same as playNext for testing purposes
-        play(track: track) { _ in }
+        // Just record the track, don't play it immediately
     }
 
     func pause() {

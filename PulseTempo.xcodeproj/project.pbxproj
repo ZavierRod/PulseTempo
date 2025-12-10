@@ -28,6 +28,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		D02A11722EE2536F00EDB23C /* PulseTempo.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = file; path = PulseTempo.xctestplan; sourceTree = "<group>"; };
 		D0C492A12EBAD91B006A0DAA /* PulseTempo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PulseTempo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D0C492AE2EBAD91E006A0DAA /* PulseTempoTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PulseTempoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D0C492B82EBAD91E006A0DAA /* PulseTempoUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PulseTempoUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -94,6 +95,7 @@
 		D0C492982EBAD91B006A0DAA = {
 			isa = PBXGroup;
 			children = (
+				D02A11722EE2536F00EDB23C /* PulseTempo.xctestplan */,
 				D0C492A32EBAD91B006A0DAA /* PulseTempo */,
 				D0C492B12EBAD91E006A0DAA /* PulseTempoTests */,
 				D0C492BB2EBAD91E006A0DAA /* PulseTempoUITests */,

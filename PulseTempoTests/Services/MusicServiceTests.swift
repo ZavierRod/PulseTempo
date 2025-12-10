@@ -3,6 +3,7 @@ import MusicKit
 import Combine
 @testable import PulseTempo
 
+@MainActor
 final class MusicServiceTests: XCTestCase {
     private var cancellables: Set<AnyCancellable> = []
     private var musicKitManager: MockMusicKitManager!
@@ -21,7 +22,7 @@ final class MusicServiceTests: XCTestCase {
         super.tearDown()
     }
 
-    @MainActor func testPlayTrack_Success() {
+    func testPlayTrack_Success() {
         let track = PulseTempo.Track(id: "1", title: "Song", artist: "Artist", durationSeconds: 200, bpm: 120)
         let expectation = expectation(description: "play track")
 
@@ -57,7 +58,7 @@ final class MusicServiceTests: XCTestCase {
         XCTAssertEqual(service.currentPlaybackTime, 0)
     }
 
-    @MainActor func testPlayNext_AddsToQueue() {
+    func testPlayNext_AddsToQueue() {
         let current = PulseTempo.Track(id: "1", title: "Song", artist: "Artist", durationSeconds: 200, bpm: 120)
         let next = PulseTempo.Track(id: "2", title: "Next", artist: "Artist", durationSeconds: 180, bpm: 125)
         service.currentTrack = current
@@ -67,7 +68,7 @@ final class MusicServiceTests: XCTestCase {
         XCTAssertEqual(service.trackQueue, [current, next])
     }
 
-    @MainActor func testReplaceNext_MaintainsQueueSizeOne() {
+    func testReplaceNext_MaintainsQueueSizeOne() {
         let current = PulseTempo.Track(id: "1", title: "Song", artist: "Artist", durationSeconds: 200, bpm: 120)
         let first = PulseTempo.Track(id: "2", title: "Next", artist: "Artist", durationSeconds: 180, bpm: 125)
         let second = PulseTempo.Track(id: "3", title: "New", artist: "Artist", durationSeconds: 210, bpm: 128)

@@ -24,7 +24,8 @@ import UIKit
 ///     }
 /// }
 /// ```
-class MusicKitManager {
+@MainActor
+class MusicKitManager: NSObject {
     
     // MARK: - Singleton
     
@@ -35,16 +36,20 @@ class MusicKitManager {
     // MARK: - Initialization
     
     /// Private initializer to enforce singleton pattern
-    private let authorizationRequester: () async -> MusicAuthorization.Status
-    private let statusProvider: () -> MusicAuthorization.Status
-    private let subscriptionProvider: () async throws -> MusicSubscription
+    private let authorizationRequester: @Sendable () async -> MusicAuthorization.Status
+    private let statusProvider: @Sendable () -> MusicAuthorization.Status
+    private let subscriptionStatusProvider: @Sendable () async throws -> Bool
 
-    init(authorizationRequester: @escaping () async -> MusicAuthorization.Status = { await MusicAuthorization.request() },
-         statusProvider: @escaping () -> MusicAuthorization.Status = { MusicAuthorization.currentStatus },
-         subscriptionProvider: @escaping () async throws -> MusicSubscription = { try await MusicSubscription.current }) {
+    init(authorizationRequester: @escaping @Sendable () async -> MusicAuthorization.Status = { await MusicAuthorization.request() },
+         statusProvider: @escaping @Sendable () -> MusicAuthorization.Status = { MusicAuthorization.currentStatus },
+         subscriptionStatusProvider: @escaping @Sendable () async throws -> Bool = {
+             let subscription = try await MusicSubscription.current
+             return subscription.canPlayCatalogContent
+         }) {
         self.authorizationRequester = authorizationRequester
         self.statusProvider = statusProvider
-        self.subscriptionProvider = subscriptionProvider
+        self.subscriptionStatusProvider = subscriptionStatusProvider
+        super.init()
     }
     
     // MARK: - Authorization
@@ -56,7 +61,6 @@ class MusicKitManager {
     ///
     /// - Parameter completion: Called with the authorization status after user responds
     /// - Note: This must be called from the main thread as it presents UI
-    @MainActor
     func requestAuthorization(completion: @escaping (MusicAuthorization.Status) -> Void) {
         // Request authorization asynchronously
         Task {
@@ -93,19 +97,15 @@ class MusicKitManager {
     ///
     /// - Returns: True if user has active subscription, false otherwise
     /// - Note: This requires authorization to be granted first
-    @MainActor
     func checkSubscriptionStatus() async -> Bool {
         // First check if we're authorized
         guard isAuthorized else {
             return false
         }
-        
+
         // Check subscription status
         do {
-            let subscription = try await subscriptionProvider()
-            
-            // Check if user can play catalog content (requires subscription)
-            return subscription.canPlayCatalogContent
+            return try await subscriptionStatusProvider()
         } catch {
             print("Error checking subscription status: \(error.localizedDescription)")
             return false
@@ -123,7 +123,6 @@ class MusicKitManager {
     /// `musicSubscriptionOffer(isPresented:options:onLoadCompletion:)` from MusicKit.
     ///
     /// - Parameter presenter: Optional view controller to present from. If nil, finds top-most controller.
-    @MainActor
     func presentSubscriptionOffer(from presenter: UIViewController? = nil) {
         // Check iOS version at runtime
         if #available(iOS 18.0, *) {
@@ -162,7 +161,6 @@ class MusicKitManager {
     }
     
     /// Finds the top-most view controller suitable for presentation in the active scene.
-    @MainActor
     private func topMostPresenter() -> UIViewController? {
         guard let windowScene = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })

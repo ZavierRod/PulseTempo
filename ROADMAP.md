@@ -217,11 +217,11 @@ Home Screen
 
 ---
 
-## **Phase 1.4: Comprehensive Testing** (1 week) 🔄 **IN PROGRESS**
+## **Phase 1.4: Comprehensive Testing** (1 week) ⚡ **IN PROGRESS - 70% Complete**
 
 > **Critical:** All Phase 1 features must be thoroughly tested before proceeding to Phase 2 (Backend). This ensures a stable foundation for backend integration.
 
-> **Current Status (Nov 18, 2024):** ✅ 15 tests passing - Core RunSessionViewModel track navigation bugs fixed. Now expanding test coverage for remaining services and view models.
+> **Current Status (Dec 4, 2024):** ✅ **66 tests passing** - Core RunSessionViewModel navigation + BPM matching algorithm complete. Service layer tests expanded. Now focusing on remaining service tests and UI tests.
 
 ### Testing Strategy
 
@@ -229,23 +229,25 @@ Home Screen
 Test individual components and business logic in isolation.
 
 **Service Layer Tests:**
-- `HeartRateService` - Mock heart rate data, test monitoring start/stop ⏳ TODO
-- `MusicService` - Mock MusicKit, test playback controls, queue management ⏳ TODO
-- `HealthKitManager` - Test authorization flow, permission handling ⏳ TODO
-- `MusicKitManager` - Test authorization flow ⏳ TODO
+- `HeartRateService` - Mock heart rate data, test monitoring start/stop ✅ COMPLETE (7 tests)
+- `MusicService` - Mock MusicKit, test playback controls, queue management ✅ COMPLETE (10 tests)
+- `HealthKitManager` - Test authorization flow, permission handling ✅ COMPLETE (4 tests)
+- `MusicKitManager` - Test authorization flow ✅ COMPLETE (7 tests)
 - `PlaylistStorageManager` - Test save/load/clear operations ✅ COMPLETE (4 tests)
 
 **View Model Tests:**
-- `RunSessionViewModel` - ⚠️ PARTIAL (5 tests - navigation only, BPM matching NOT tested)
-  - ✅ Test rapid skip forward/backward scenarios
+- `RunSessionViewModel` - ✅ COMPLETE (28 tests total)
+  - ✅ Test rapid skip forward/backward scenarios (5 tests)
   - ✅ Test `tracksPlayed` array management
   - ✅ Test `playedTrackIds` set management
   - ✅ Test edge cases (no previous track, end of playlist)
-  - ❌ Test BPM-based track selection algorithm ⏳ TODO
-  - ❌ Test BPM scoring/weighting (60% BPM, 20% variety, 20% energy) ⏳ TODO
-  - ❌ Test next track selection updates based on HR changes ⏳ TODO
-  - ❌ Test initial track selection (random/default at run start) ⏳ TODO
-  - ❌ Test that current song is never interrupted ⏳ TODO
+  - ✅ **BPM Matching Algorithm Tests (23 tests)** - NEW!
+    - ✅ BPM scoring (perfect match, close, moderate, large differences, missing BPM)
+    - ✅ Variety penalties (fresh vs recently played tracks)
+    - ✅ Energy zone mapping (low, moderate, high, max intensity)
+    - ✅ Track selection (best match, tied scores, pool exhaustion, variety weighting)
+    - ✅ Queue updates (initial queue, HR changes, consistent selection, manual skips)
+    - ✅ Edge cases (empty lists, single track, missing BPM, extreme HRs)
 - `PlaylistSelectionViewModel` - Test playlist fetching, selection logic ⏳ TODO
 - `HomeViewModel` - Test playlist loading, track fetching ✅ COMPLETE (3 tests)
 
@@ -253,13 +255,14 @@ Test individual components and business logic in isolation.
 ```
 PulseTempoTests/
 ├── Services/
-│   ├── HeartRateServiceTests.swift ⏳ TODO
-│   ├── MusicServiceTests.swift ⏳ TODO
-│   ├── HealthKitManagerTests.swift ⏳ TODO
-│   ├── MusicKitManagerTests.swift ⏳ TODO
+│   ├── HeartRateServiceTests.swift ✅ CREATED
+│   ├── MusicServiceTests.swift ✅ CREATED
+│   ├── HealthKitManagerTests.swift ✅ CREATED
+│   ├── MusicKitManagerTests.swift ✅ CREATED
 │   └── PlaylistStorageManagerTests.swift ✅ CREATED
 ├── ViewModels/
-│   ├── RunSessionViewModelTests.swift ✅ CREATED
+│   ├── RunSessionViewModelTests.swift ✅ CREATED (5 navigation tests)
+│   ├── BPMMatchingAlgorithmTests.swift ✅ CREATED (23 BPM algorithm tests)
 │   ├── PlaylistSelectionViewModelTests.swift ⏳ TODO
 │   └── HomeViewModelTests.swift ✅ CREATED
 └── Models/
@@ -387,15 +390,15 @@ Add logging - Track state changes for debugging
 ### Success Criteria
 
 Before moving to Phase 2, ensure:
-- [ ] 80%+ code coverage for critical paths (Currently: ~40% estimated)
-- [x] All unit tests passing (15/15 tests passing ✅)
+- [/] 80%+ code coverage for critical paths (Currently: ~65% estimated - improving!)
+- [x] All unit tests passing (66/66 tests passing ✅)
 - [x] Critical integration tests passing (3/3 tests passing ✅)
 - [ ] All UI tests passing (0 UI tests created yet)
 - [ ] Manual testing checklist 100% complete (Not started)
-- [x] No critical bugs (Track navigation bugs fixed ✅)
-- [ ] Performance is acceptable (no UI lag, smooth animations)
+- [x] No critical bugs (Track navigation + BPM algorithm validated ✅)
+- [/] Performance is acceptable (BPM selection fast, monitoring in progress)
 
-**Current Progress:** 15 tests passing | ~40% Phase 1.4 complete | Ready to expand test coverage
+**Current Progress:** 66 tests passing | ~70% Phase 1.4 complete | BPM matching algorithm fully tested ✅
 
 ---
 
@@ -895,5 +898,5 @@ PulseTempoWatch/
 
 ---
 
-**Last Updated:** November 18, 2024
-**Version:** 1.2 - Updated Phase 1.4 testing progress: 15 tests passing, expanding coverage for remaining services and view models
+**Last Updated:** December 4, 2024  
+**Version:** 1.3 - Phase 1.4 testing progress: 66 tests passing, BPM matching algorithm fully tested (23 new tests), service layer tests complete

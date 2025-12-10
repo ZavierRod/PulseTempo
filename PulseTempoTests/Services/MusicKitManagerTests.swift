@@ -8,7 +8,7 @@ final class MusicKitManagerTests: XCTestCase {
         let manager = MusicKitManager(
             authorizationRequester: { .authorized },
             statusProvider: { .authorized },
-            subscriptionProvider: { try await MusicSubscription.current }
+            subscriptionStatusProvider: { true }
         )
 
         manager.requestAuthorization { status in
@@ -24,7 +24,7 @@ final class MusicKitManagerTests: XCTestCase {
         let manager = MusicKitManager(
             authorizationRequester: { .denied },
             statusProvider: { .denied },
-            subscriptionProvider: { try await MusicSubscription.current }
+            subscriptionStatusProvider: { true }
         )
 
         manager.requestAuthorization { status in
@@ -35,49 +35,49 @@ final class MusicKitManagerTests: XCTestCase {
         wait(for: [expectation], timeout: 1.0)
     }
 
-    func testAuthorizationStatus() {
+    @MainActor func testAuthorizationStatus() {
         let manager = MusicKitManager(
             authorizationRequester: { .authorized },
             statusProvider: { .restricted },
-            subscriptionProvider: { try await MusicSubscription.current }
+            subscriptionStatusProvider: { true }
         )
 
         XCTAssertEqual(manager.authorizationStatus, .restricted)
     }
 
-    func testIsAuthorized() {
+    @MainActor func testIsAuthorized() {
         let manager = MusicKitManager(
             authorizationRequester: { .authorized },
             statusProvider: { .authorized },
-            subscriptionProvider: { try await MusicSubscription.current }
+            subscriptionStatusProvider: { true }
         )
 
         XCTAssertTrue(manager.isAuthorized)
     }
 
-    func testCheckSubscriptionStatus_WithSubscription() async {
+    @MainActor func testCheckSubscriptionStatus_WithSubscription() async {
         let manager = MusicKitManager(
             authorizationRequester: { .authorized },
             statusProvider: { .authorized },
-            subscriptionProvider: { try await MusicSubscription.current }
+            subscriptionStatusProvider: { true }
         )
 
         let result = await manager.checkSubscriptionStatus()
         XCTAssert(result == true || result == false)
     }
 
-    func testCheckSubscriptionStatus_NoSubscription() async {
+    @MainActor func testCheckSubscriptionStatus_NoSubscription() async {
         let manager = MusicKitManager(
             authorizationRequester: { .authorized },
             statusProvider: { .authorized },
-            subscriptionProvider: { throw NSError(domain: "MusicKitManagerTests", code: 1) }
+            subscriptionStatusProvider: { throw NSError(domain: "MusicKitManagerTests", code: 1) }
         )
 
         let result = await manager.checkSubscriptionStatus()
         XCTAssertFalse(result)
     }
 
-    func testSingletonPattern() {
+    @MainActor func testSingletonPattern() {
         let first = MusicKitManager.shared
         let second = MusicKitManager.shared
         XCTAssertTrue(first === second)
