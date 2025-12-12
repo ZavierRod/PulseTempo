@@ -78,22 +78,23 @@ When selecting the next track, the app scores each available track using:
 
 ### 1.1 Service Layer Architecture
 
-#### HeartRateService
+#### HeartRateService ✅
 Integrate HealthKit for real heart rate monitoring:
-- Request HealthKit permissions
-- Set up `HKWorkoutSession` for live workout tracking
-- Stream heart rate data via `HKAnchoredObjectQuery`
-- Handle **Apple Watch** connectivity via WatchConnectivity framework
-- **Alternative: Garmin Venu 3S** connectivity via Garmin Connect IQ SDK or Health Sync
-  - Implement Garmin Health API integration for HR streaming
-  - Handle authentication and device pairing
-  - Fallback to HealthKit if Garmin syncs data to Apple Health
-- Implement error handling for missing watch/permissions
-- **Add Demo Mode for development without compatible wearable**
-  - Simulate realistic workout HR patterns (warm-up, steady, intense, cool-down)
-  - Auto-varying HR simulation during workouts
-  - Toggle between Demo Mode, Apple Watch Mode, and Garmin Mode
-  - Seamless transition when wearable becomes available
+- ✅ Request HealthKit permissions
+- ✅ Set up `HKWorkoutSession` for live workout tracking
+- ✅ Stream heart rate data via `HKAnchoredObjectQuery`
+- ✅ Handle **Apple Watch** connectivity via WatchConnectivity framework
+- ✅ **Alternative: Garmin Venu 3S** connectivity via HealthKit Sync (Option B)
+  - ✅ WearableDevice model created (Apple Watch, Garmin Venu 3S, Demo Mode)
+  - ✅ WearableDeviceManager for device selection and persistence
+  - ✅ HeartRateService accepts device parameter
+  - ✅ Garmin HR data flows through HealthKit automatically (1-3s latency)
+- ✅ Implement error handling for missing watch/permissions
+- ✅ **Add Demo Mode for development without compatible wearable**
+  - ✅ Simulate realistic workout HR patterns (warm-up, steady, intense, cool-down)
+  - ✅ Auto-varying HR simulation during workouts
+  - ✅ Toggle between Demo Mode, Apple Watch Mode, and Garmin Mode
+  - ✅ Seamless transition when wearable becomes available
 
 **Files to create:**
 - `PulseTempo/Services/HeartRateService.swift` ✅
@@ -134,15 +135,15 @@ Integrate MusicKit for Apple Music control:
 
 ### 1.3 Additional UI Screens
 
-#### Onboarding Flow
-- Welcome screen with app explanation
+#### Onboarding Flow ✅
+- ✅ Welcome screen with app explanation
 - **Account creation / Sign in with Apple step** (creates or restores a backend session)
-- HealthKit permission request
-- Apple Music authorization
-- **Wearable device selection and pairing check**
-  - Option 1: Apple Watch pairing check
-  - Option 2: Garmin Venu 3S connection setup
-  - Option 3: Demo mode (no wearable)
+- ✅ HealthKit permission request
+- ✅ Apple Music authorization
+- ✅ **Wearable device selection and pairing check**
+  - ✅ Option 1: Apple Watch pairing check
+  - ✅ Option 2: Garmin Venu 3S connection setup (with instructions)
+  - ✅ Option 3: Demo mode (no wearable)
 
 **Files to create:**
 - `PulseTempo/Views/Onboarding/WelcomeView.swift`
@@ -603,6 +604,7 @@ backend/
 ## **Phase 4: Wearable Companion Apps** (3-4 weeks)
 
 > **Note**: This phase now includes both Apple Watch and Garmin Venu 3S companion app development.
+> **Status**: Garmin Venu 3S integration (Option B - HealthKit Sync) ✅ **COMPLETED** (Dec 12, 2024)
 
 ### 4.1 Apple watchOS App
 
@@ -938,5 +940,5 @@ PulseTempoWatch/
 
 ---
 
-**Last Updated:** December 4, 2024  
-**Version:** 1.3 - Phase 1.4 testing progress: 66 tests passing, BPM matching algorithm fully tested (23 new tests), service layer tests complete
+**Last Updated:** December 12, 2024  
+**Version:** 1.4 - Garmin Venu 3S integration complete! Added wearable device selection (Apple Watch, Garmin Venu 3S, Demo Mode) with HealthKit sync. Phase 1.4 testing: 119 tests (115 passing, 4 skipped).
