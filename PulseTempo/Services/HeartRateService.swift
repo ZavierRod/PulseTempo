@@ -12,7 +12,7 @@ import Combine     // Reactive programming framework
 protocol HeartRateServiceProtocol: AnyObject {
     var currentHeartRatePublisher: AnyPublisher<Int, Never> { get }
     var errorPublisher: AnyPublisher<Error?, Never> { get }
-    func startMonitoring(useDemoMode: Bool, completion: @escaping (Result<Void, Error>) -> Void)
+    func startMonitoring(device: WearableDevice, useDemoMode: Bool, completion: @escaping (Result<Void, Error>) -> Void)
     func stopMonitoring()
 }
 
@@ -39,6 +39,7 @@ class HeartRateService: ObservableObject, HeartRateServiceProtocol {
     @Published var isMonitoring: Bool = false   // Is actively monitoring?
     @Published var error: Error?                // Any error that occurred
     @Published var isDemoMode: Bool = false     // Is using simulated heart rate?
+    @Published var selectedDevice: WearableDevice = .demoMode  // Which device is providing HR data
 
     var currentHeartRatePublisher: AnyPublisher<Int, Never> {
         $currentHeartRate.eraseToAnyPublisher()
@@ -114,11 +115,15 @@ class HeartRateService: ObservableObject, HeartRateServiceProtocol {
     //         return
     //     ...
     /// Start monitoring heart rate
+    /// - Parameter device: The wearable device to use for monitoring (default: demo mode)
     /// - Parameter completion: Called when monitoring starts or fails
     /// - Parameter useDemoMode: Force demo mode even if HealthKit is available (default: false)
-    func startMonitoring(useDemoMode: Bool = false, completion: @escaping (Result<Void, Error>) -> Void) {
+    func startMonitoring(device: WearableDevice = .demoMode, useDemoMode: Bool = false, completion: @escaping (Result<Void, Error>) -> Void) {
+        // Store the selected device
+        self.selectedDevice = device
+        
         // If demo mode is requested or HealthKit is unavailable, use simulation
-        if useDemoMode || !healthKitManager.isHealthKitAvailable {
+        if useDemoMode || device == .demoMode || !healthKitManager.isHealthKitAvailable {
             startDemoMode()
             completion(.success(()))
             return

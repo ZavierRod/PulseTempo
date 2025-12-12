@@ -26,7 +26,7 @@ PulseTempo is a workout music app that intelligently matches your music to your 
 - **Rationale**: User isn't warmed up yet, so BPM matching isn't critical at this stage
 
 #### 2. **During Workout (Continuous BPM Matching)**
-- App continuously monitors heart rate via Apple Watch
+- App continuously monitors heart rate via **Apple Watch** or **Garmin Venu 3S**
 - As HR changes, app intelligently selects the NEXT track that matches current HR
 - **Key Principle**: Never interrupt the currently playing song
 - Next track is queued and ready to play when:
@@ -51,7 +51,7 @@ When selecting the next track, the app scores each available track using:
 
 - **Concept**: Match music BPM to your running cadence (steps per minute)
 - **How it works**:
-  - Apple Watch tracks steps per minute during run
+  - Apple Watch or Garmin Venu 3S tracks steps per minute during run
   - App selects tracks with BPM matching your cadence
   - Same queue-based, non-disruptive approach as HR matching
 - **User choice**: Toggle between HR matching mode or Cadence matching mode
@@ -64,10 +64,10 @@ When selecting the next track, the app scores each available track using:
 
 ### Key Differentiators
 1. **Queue-based matching** (not mid-song interruption)
-2. **Real-time HR monitoring** with Apple Watch integration
+2. **Real-time HR monitoring** with Apple Watch or Garmin Venu 3S integration
 3. **Smart scoring algorithm** (not just simple BPM matching)
 4. **Workout-aware** (understands warm-up, steady state, cool-down)
-5. **Demo mode** for development/testing without Apple Watch
+5. **Demo mode** for development/testing without compatible wearable
 6. **Dual matching modes** (future): HR-based OR Cadence-based matching
 
 
@@ -83,13 +83,17 @@ Integrate HealthKit for real heart rate monitoring:
 - Request HealthKit permissions
 - Set up `HKWorkoutSession` for live workout tracking
 - Stream heart rate data via `HKAnchoredObjectQuery`
-- Handle Apple Watch connectivity via WatchConnectivity framework
+- Handle **Apple Watch** connectivity via WatchConnectivity framework
+- **Alternative: Garmin Venu 3S** connectivity via Garmin Connect IQ SDK or Health Sync
+  - Implement Garmin Health API integration for HR streaming
+  - Handle authentication and device pairing
+  - Fallback to HealthKit if Garmin syncs data to Apple Health
 - Implement error handling for missing watch/permissions
-- **Add Demo Mode for development without Apple Watch**
+- **Add Demo Mode for development without compatible wearable**
   - Simulate realistic workout HR patterns (warm-up, steady, intense, cool-down)
   - Auto-varying HR simulation during workouts
-  - Toggle between Demo Mode and Apple Watch Mode
-  - Seamless transition when Watch becomes available
+  - Toggle between Demo Mode, Apple Watch Mode, and Garmin Mode
+  - Seamless transition when wearable becomes available
 
 **Files to create:**
 - `PulseTempo/Services/HeartRateService.swift` ✅
@@ -112,7 +116,7 @@ Integrate MusicKit for Apple Music control:
 
 ### 1.2 Enhanced View Models
 
-**Note:** Demo Mode integration happens here - RunSessionViewModel will use simulated HR until Apple Watch is available.
+**Note:** Demo Mode integration happens here - RunSessionViewModel will use simulated HR until Apple Watch or Garmin Venu 3S is available.
 
 #### Refactor RunSessionViewModel ✅
 - ✅ Connect to HeartRateService for live BPM updates
@@ -135,7 +139,10 @@ Integrate MusicKit for Apple Music control:
 - **Account creation / Sign in with Apple step** (creates or restores a backend session)
 - HealthKit permission request
 - Apple Music authorization
-- Apple Watch pairing check
+- **Wearable device selection and pairing check**
+  - Option 1: Apple Watch pairing check
+  - Option 2: Garmin Venu 3S connection setup
+  - Option 3: Demo mode (no wearable)
 
 **Files to create:**
 - `PulseTempo/Views/Onboarding/WelcomeView.swift`
@@ -593,9 +600,11 @@ backend/
 
 ---
 
-## **Phase 4: Apple Watch Companion** (2-3 weeks)
+## **Phase 4: Wearable Companion Apps** (3-4 weeks)
 
-### 4.1 watchOS App
+> **Note**: This phase now includes both Apple Watch and Garmin Venu 3S companion app development.
+
+### 4.1 Apple watchOS App
 
 #### Watch App Features
 - Simplified run view with large HR display
@@ -615,7 +624,7 @@ PulseTempoWatch/
     └── WatchConnectivityService.swift
 ```
 
-### 4.2 Watch-iPhone Communication
+### 4.2 Apple Watch-iPhone Communication
 
 #### WatchConnectivity
 - Real-time HR streaming to iPhone
@@ -626,6 +635,35 @@ PulseTempoWatch/
 **Files to create:**
 - `PulseTempo/Services/WatchConnectivityManager.swift` (iOS)
 - `PulseTempoWatch/Services/WatchConnectivityManager.swift` (watchOS)
+
+### 4.3 Garmin Venu 3S Integration
+
+#### Garmin Connect IQ App (Alternative to watchOS)
+**Implementation Options:**
+
+**Option A: Direct Garmin SDK Integration**
+- Use Garmin Health SDK for iOS to receive real-time HR data
+- Requires Garmin Connect app installed on iPhone
+- App receives HR data via Bluetooth when Garmin is paired
+
+**Option B: HealthKit Sync (Simpler Approach)**
+- Garmin Venu 3S syncs HR data to Apple Health via Garmin Connect
+- PulseTempo reads HR from HealthKit (same as Apple Watch)
+- Slight delay (1-2 seconds) but simpler implementation
+- **Recommended for MVP**
+
+**Features:**
+- Automatic device detection (Garmin vs Apple Watch)
+- Seamless HR streaming during workouts
+- Battery optimization for Bluetooth Low Energy
+
+**Files to create:**
+- `PulseTempo/Services/GarminConnectivityManager.swift` (iOS)
+- `PulseTempo/Services/WearableDeviceManager.swift` (unified interface)
+
+**Implementation Priority:**
+- **Phase 4A**: Complete Apple Watch app (higher priority, larger user base)
+- **Phase 4B**: Add Garmin Venu 3S support (enables alternative wearable ecosystem)
 
 ---
 
@@ -736,7 +774,7 @@ PulseTempoWatch/
 #### Cadence Matching Mode (Priority #1)
 **Timeline:** 2-3 weeks post-launch
 **Implementation:**
-- Add cadence tracking via Apple Watch pedometer data
+- Add cadence tracking via Apple Watch or Garmin Venu 3S pedometer data
 - Create `CadenceService` to monitor steps per minute
 - Extend BPM matching algorithm to work with cadence instead of HR
 - Add settings toggle: "Match music to: Heart Rate / Cadence / Hybrid"
@@ -788,7 +826,7 @@ PulseTempoWatch/
 
 1. ✅ **HeartRateService** - Core differentiator (COMPLETED)
 2. ✅ **Integrate MusicKit** - Essential for actual music control (COMPLETED)
-3. 🔄 **Add Demo Mode to HeartRateService** - Enable development without Apple Watch (IN PROGRESS)
+3. 🔄 **Add Demo Mode to HeartRateService** - Enable development without wearable device (IN PROGRESS)
 4. **Integrate services with RunSessionViewModel** - Connect HR and Music services
 5. **Build playlist selection UI** - Users need to choose music sources
 6. **Set up FastAPI backend skeleton** - Get infrastructure ready early
@@ -838,9 +876,9 @@ PulseTempoWatch/
 
 ---
 
-## Demo Mode Strategy (No Apple Watch)
+## Demo Mode Strategy (No Wearable Device)
 
-**Context:** Development is proceeding without Apple Watch hardware (arriving in a few weeks).
+**Context:** Development is proceeding without wearable hardware. This strategy enables full development and testing without requiring an Apple Watch or Garmin Venu 3S.
 
 ### Implementation Approach
 
@@ -851,24 +889,25 @@ PulseTempoWatch/
   - Steady state: 140-150 BPM (slight variations)
   - Intense intervals: 160-175 BPM (peaks)
   - Cool-down: 120-100 BPM (gradual decrease)
-- Add settings toggle for Demo Mode vs. Apple Watch Mode
+- Add settings toggle for Demo Mode vs. Wearable Mode (Apple Watch or Garmin)
 - Build and test entire app with simulated data
 
-**Phase 1B: Apple Watch Integration** (When hardware arrives)
-- Test real HealthKit integration
-- Validate HR accuracy and responsiveness
+**Phase 1B: Wearable Integration** (When hardware arrives)
+- **Apple Watch**: Test real HealthKit integration via WatchConnectivity
+- **Garmin Venu 3S**: Test HealthKit sync or Garmin Health SDK integration
+- Validate HR accuracy and responsiveness for both devices
 - Compare demo patterns vs. real workout data
 - Fine-tune BPM matching algorithm with real data
-- Keep demo mode for users without Watch
+- Keep demo mode for users without compatible wearable
 
 ### Benefits of This Approach
 
-✅ **Continue Development** - No blocked work while waiting for Watch
+✅ **Continue Development** - No blocked work while waiting for wearable hardware
 ✅ **Test BPM Matching** - Validate track selection algorithm
 ✅ **Build Complete UI** - All screens and flows can be implemented
-✅ **Demo Ready** - Show app to users/investors without Watch
-✅ **Future-Proof** - Easy toggle when Watch arrives
-✅ **Broader Audience** - Support users without Watch (with manual input)
+✅ **Demo Ready** - Show app to users/investors without physical device
+✅ **Future-Proof** - Easy toggle when wearable devices arrive
+✅ **Broader Audience** - Support users without Apple Watch or Garmin (demo mode)
 
 ### Demo Mode Features
 
@@ -883,7 +922,7 @@ PulseTempoWatch/
    
 3. **Settings Integration**
    - Clear indicator when in Demo Mode
-   - Easy switch to Watch mode
+   - Easy switch between Demo / Apple Watch / Garmin Venu 3S modes
    - Persist user preference
 
 ---
@@ -895,7 +934,7 @@ PulseTempoWatch/
 - **Battery matters**: Optimize for battery life throughout development
 - **Privacy first**: Be transparent about data collection and usage
 - **Iterate quickly**: Use TestFlight feedback to prioritize features
-- **Demo Mode**: Enables full development without Apple Watch hardware
+- **Demo Mode**: Enables full development without wearable hardware (Apple Watch or Garmin)
 
 ---
 

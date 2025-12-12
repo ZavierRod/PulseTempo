@@ -9,6 +9,7 @@ struct OnboardingCoordinator: View {
     /// Represents the current step in the onboarding experience.
     enum OnboardingStep {
         case welcome
+        case wearableSelection
         case healthKit
         case musicKit
         case playlistSelection
@@ -49,6 +50,9 @@ struct OnboardingCoordinator: View {
     
     /// Tracks whether user has selected playlists
     @State private var hasSelectedPlaylists = false
+    
+    /// Selected wearable device
+    @State private var selectedWearableDevice: WearableDevice = .demoMode
 
     // MARK: - Derived State
 
@@ -71,6 +75,21 @@ struct OnboardingCoordinator: View {
                 WelcomeView {
                     advanceFromWelcome()
                 }
+            
+            case .wearableSelection:
+                WearableSelectionView(
+                    onDeviceSelected: { device in
+                        selectedWearableDevice = device
+                        advanceFromWearableSelection()
+                    },
+                    onBack: {
+                        currentStep = .welcome
+                    },
+                    onSkip: {
+                        selectedWearableDevice = .demoMode
+                        currentStep = .healthKit
+                    }
+                )
 
             case .healthKit:
                 HealthKitPermissionView(
@@ -80,7 +99,7 @@ struct OnboardingCoordinator: View {
                         advanceFromHealthKit()
                     },
                     onBack: {
-                        currentStep = .welcome
+                        currentStep = .wearableSelection
                     },
                     onSkip: {
                         currentStep = .musicKit
@@ -99,7 +118,7 @@ struct OnboardingCoordinator: View {
                         if isHealthAuthorized {
                             currentStep = .healthKit
                         } else {
-                            currentStep = .welcome
+                            currentStep = .wearableSelection
                         }
                     },
                     onSkip: {
@@ -164,6 +183,9 @@ struct OnboardingCoordinator: View {
         case .welcome:
             // Stay on the welcome step until the user taps "Get Started".
             break
+        case .wearableSelection:
+            // Stay on wearable selection until user chooses a device
+            break
         case .healthKit:
             if isHealthAuthorized {
                 currentStep = .musicKit
@@ -179,6 +201,11 @@ struct OnboardingCoordinator: View {
 
     /// Advances from the welcome screen to the next required step, if any.
     private func advanceFromWelcome() {
+        currentStep = .wearableSelection
+    }
+    
+    /// Advances from wearable selection to HealthKit permissions
+    private func advanceFromWearableSelection() {
         if !isHealthAuthorized {
             currentStep = .healthKit
         } else if !isMusicAuthorized {

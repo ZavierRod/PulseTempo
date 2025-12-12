@@ -290,13 +290,14 @@ final class RunSessionViewModel: ObservableObject {
         queuedNextTrack = nil  // Clear queued track
         
         // Start heart rate monitoring
-        // Check if we should use demo mode (no Apple Watch available)
-        let useDemoMode = !HealthKitManager.shared.isHealthKitAvailable
+        // Get the selected wearable device from device manager
+        let selectedDevice = WearableDeviceManager.loadDevicePreference()
+        let useDemoMode = selectedDevice == .demoMode || !HealthKitManager.shared.isHealthKitAvailable
         
-        heartRateService.startMonitoring(useDemoMode: useDemoMode) { [weak self] result in
+        heartRateService.startMonitoring(device: selectedDevice, useDemoMode: useDemoMode) { [weak self] result in
             switch result {
             case .success:
-                print("✅ Heart rate monitoring started")
+                print("✅ Heart rate monitoring started with \(selectedDevice.rawValue)")
             case .failure(let error):
                 self?.errorMessage = "Failed to start heart rate monitoring: \(error.localizedDescription)"
             }
