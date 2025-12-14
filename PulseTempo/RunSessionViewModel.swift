@@ -44,6 +44,7 @@ final class RunSessionViewModel: ObservableObject {
     @Published var isPlaying: Bool = false       // Is music currently playing?
     @Published var currentTrack: Track?          // Currently playing track (? = Optional/None)
     @Published var currentHeartRate: Int = 0     // Current heart rate in BPM
+    @Published var currentPlaybackTime: TimeInterval = 0  // Current playback position in seconds
     
     // RUN SESSION STATE
     @Published var sessionState: RunSessionState = .notStarted  // Current run state
@@ -88,6 +89,8 @@ final class RunSessionViewModel: ObservableObject {
     // NEXT TRACK QUEUE MANAGEMENT
     // Per ROADMAP: intelligently select ONE next track that updates as HR changes
     private var queuedNextTrack: Track?          // The track queued to play next
+    private var lastQueueUpdateTime: Date?       // Last time queue was updated
+    private let queueUpdateThrottleInterval: TimeInterval = 5.0  // Min seconds between updates
 
     private var lastSkipTimestamps: [NavigationDirection: Date] = [:]
     private let skipDebounceInterval: TimeInterval = 0.3
@@ -171,11 +174,21 @@ final class RunSessionViewModel: ObservableObject {
             .store(in: &cancellables)
 
         // OBSERVE CURRENT TRACK FROM MUSIC SERVICE
+        // Debounce and deduplicate to prevent duplicate events when track changes trigger multiple publishes
         musicService.currentTrackPublisher
+            .debounce(for: .milliseconds(100), scheduler: DispatchQueue.main)
+            .removeDuplicates { $0?.id == $1?.id }
             .sink { [weak self] track in
                 if let track = track {
                     self?.recordTrackFromService(track)
                 }
+            }
+            .store(in: &cancellables)
+        
+        // OBSERVE CURRENT PLAYBACK TIME
+        musicService.currentPlaybackTimePublisher
+            .sink { [weak self] time in
+                self?.currentPlaybackTime = time
             }
             .store(in: &cancellables)
         
@@ -459,12 +472,33 @@ final class RunSessionViewModel: ObservableObject {
     ///
     /// Example: HR at 160 → queue 160 BPM song. HR changes to 140 → REPLACE with 140 BPM song.
     private func updateQueuedNextTrack(_ heartRate: Int) {
+        // Don't update queue until we have a current track playing
+        // This prevents interfering with the initial track startup
+        guard currentTrack != nil else {
+            print("⏸️ Skipping queue update - no current track playing yet")
+            return
+        }
+        
+        // Throttle queue updates to prevent excessive rebuilds that disrupt playback
+        // Only allow updates every 5 seconds minimum
+        if let lastUpdate = lastQueueUpdateTime,
+           Date().timeIntervalSince(lastUpdate) < queueUpdateThrottleInterval {
+            // Too soon since last update, skip this one
+            return
+        }
+        
         // Select the best track for current heart rate
         let bestMatchTrack = selectTrackForHeartRate(heartRate)
         
         // Only update queue if it's different from what's already queued
         // This prevents repeatedly queueing the same track
         guard queuedNextTrack?.id != bestMatchTrack.id else {
+            return
+        }
+        
+        // Validate the track has necessary data before attempting to queue
+        guard !bestMatchTrack.title.isEmpty, !bestMatchTrack.artist.isEmpty else {
+            print("⚠️ Skipping queue update - selected track has invalid metadata")
             return
         }
         
@@ -477,8 +511,14 @@ final class RunSessionViewModel: ObservableObject {
         // If not, this queues the first track
         musicService.replaceNext(track: bestMatchTrack)
         
+        // Record the time of this update for throttling
+        lastQueueUpdateTime = Date()
+        
         let action = hadPreviouslyQueuedTrack ? "Replaced" : "Queued"
-        print("🎵 \(action) next track: \(bestMatchTrack.title) (\(bestMatchTrack.bpm ?? 0) BPM) for HR: \(heartRate)")
+        let currentTrackName = currentTrack?.title ?? "Unknown"
+        let trackBPM = bestMatchTrack.bpm ?? 0
+        let bpmDiff = abs(trackBPM - heartRate)
+        print("🎵 \(action) next track: \(bestMatchTrack.title) (\(trackBPM) BPM, diff: \(bpmDiff)) for HR: \(heartRate) | Playing: '\(currentTrackName)'")
     }
     
     /// Get BPM tolerance based on run mode
@@ -492,11 +532,19 @@ final class RunSessionViewModel: ObservableObject {
     
     /// Select best track for given heart rate with smart BPM matching
     private func selectTrackForHeartRate(_ heartRate: Int) -> Track {
-        var availableTracks = tracks.filter { !playedTrackIds.contains($0.id) }
+        // Get current track ID to exclude from selection
+        let currentTrackId = currentTrack?.id
         
+        // Filter out: 1) already played tracks, 2) currently playing track
+        var availableTracks = tracks.filter { track in
+            !playedTrackIds.contains(track.id) && track.id != currentTrackId
+        }
+        
+        // If all tracks have been played, reset and allow repeats (but still exclude current)
         if availableTracks.isEmpty {
+            print("🔄 All tracks played, resetting pool for repeat cycle")
             playedTrackIds.removeAll()
-            availableTracks = tracks
+            availableTracks = tracks.filter { $0.id != currentTrackId }
         }
         
         let scoredTracks = availableTracks.map { track -> (score: Double, track: Track) in
@@ -508,13 +556,20 @@ final class RunSessionViewModel: ObservableObject {
             return tracks[0]
         }
         
-        playedTrackIds.insert(bestMatch.track.id)
+        // NOTE: Don't mark as played here - only mark when track actually plays
+        // via recordTrackFromService(). This prevents premature exhaustion of the pool
+        // when the queued next track changes multiple times.
         return bestMatch.track
     }
     
     /// Score a track for heart rate matching (higher = better)
     private func scoreTrack(_ track: Track, forHeartRate heartRate: Int) -> Double {
-        guard let trackBPM = track.bpm else { return 0.0 }
+        guard let trackBPM = track.bpm else {
+            // If track has no BPM data, give it a moderate score (0.5)
+            // This ensures it can still be selected, but won't be prioritized
+            print("⚠️ Track '\(track.title)' has no BPM data, using fallback score")
+            return 0.5
+        }
         
         // BPM match score (60% weight)
         let bpmDifference = abs(trackBPM - heartRate)
@@ -590,15 +645,35 @@ private extension RunSessionViewModel {
     }
 
     func recordTrackFromService(_ track: Track) {
+        // Synchronous check-and-insert to prevent race condition
+        // Two async blocks could both pass contains() check before either inserts
+        var shouldProcess = false
+        var updatedIds = Set<String>()
+        var trackCount = 0
+        
+        navigationQueue.sync {
+            if !playedTrackIds.contains(track.id) {
+                playedTrackIds.insert(track.id)
+                shouldProcess = true
+                updatedIds = playedTrackIds
+                trackCount = tracks.count
+            }
+        }
+        
+        guard shouldProcess else { return }
+        
+        // Now do async work for history updates and logging
         navigationQueue.async { [weak self] in
             guard let self else { return }
+            
             var updatedHistory = self.tracksPlayedInternal
             if updatedHistory.last?.id != track.id {
                 updatedHistory.append(track)
             }
-
-            var updatedIds = self.playedTrackIds
-            updatedIds.insert(track.id)
+            
+            // Log when a track is marked as played (for debugging)
+            let remaining = trackCount - updatedIds.count
+            print("📝 Marked as played: '\(track.title)' | Played: \(updatedIds.count)/\(trackCount), Available: \(remaining)")
 
             self.dispatchStateUpdate(track: track, history: updatedHistory, playedIds: updatedIds)
         }
@@ -609,10 +684,10 @@ private extension RunSessionViewModel {
             guard let self else { return }
             var updatedHistory = historyBaseline ?? self.tracksPlayedInternal
             updatedHistory.append(track)
-            var updatedIds = self.playedTrackIds
-            updatedIds.insert(track.id)
+            // NOTE: Don't insert into playedTrackIds here - let recordTrackFromService handle it
+            // when the track actually starts playing. This prevents double-counting.
 
-            self.dispatchStateUpdate(track: track, history: updatedHistory, playedIds: updatedIds)
+            self.dispatchStateUpdate(track: track, history: updatedHistory, playedIds: self.playedTrackIds)
 
             self.musicService.play(track: track) { [weak self] result in
                 if case .failure(let error) = result {
@@ -626,10 +701,11 @@ private extension RunSessionViewModel {
     func playTrack(_ track: Track, historyBaseline: [Track]? = nil, playedIdsBaseline: Set<String>? = nil) {
         var updatedHistory = historyBaseline ?? tracksPlayedInternal
         updatedHistory.append(track)
-        var updatedIds = playedIdsBaseline ?? playedTrackIds
-        updatedIds.insert(track.id)
+        // NOTE: Don't insert into playedTrackIds here - let recordTrackFromService handle it
+        // when the track actually starts playing. This prevents double-counting.
+        let currentIds = playedIdsBaseline ?? playedTrackIds
 
-        dispatchStateUpdate(track: track, history: updatedHistory, playedIds: updatedIds)
+        dispatchStateUpdate(track: track, history: updatedHistory, playedIds: currentIds)
 
         musicService.play(track: track) { [weak self] result in
             if case .failure(let error) = result {

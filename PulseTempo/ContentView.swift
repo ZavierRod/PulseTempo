@@ -42,6 +42,27 @@ struct ActiveRunView: View {
     @State private var timer: Timer?            // Timer for simulating heart rate changes
     @State private var runSessionVM: RunSessionViewModel?  // Initialized in onAppear with tracks
     
+    // COMPUTED PROPERTIES
+    
+    /// Calculate song progress as a value from 0.0 to 1.0
+    private var songProgress: Double {
+        guard let vm = runSessionVM,
+              let track = vm.currentTrack,
+              track.durationSeconds > 0 else {
+            return 0.0
+        }
+        let progress = vm.currentPlaybackTime / Double(track.durationSeconds)
+        return min(max(progress, 0.0), 1.0)  // Clamp between 0 and 1
+    }
+    
+    /// Format time interval as "M:SS" string
+    private func formatTime(_ seconds: TimeInterval) -> String {
+        let totalSeconds = Int(seconds)
+        let minutes = totalSeconds / 60
+        let secs = totalSeconds % 60
+        return "\(minutes):\(String(format: "%02d", secs))"
+    }
+    
     // BODY PROPERTY (Required by View protocol)
     // This computed property returns the UI layout
     // "some View" means it returns something that conforms to View protocol
@@ -159,8 +180,8 @@ struct ActiveRunView: View {
                     // PROGRESS BAR
                     VStack(spacing: 8) {
                         // Progress indicator showing song position
-                        // value: 0.3 means 30% complete (0.0 to 1.0 range)
-                        ProgressView(value: 0.3)
+                        // value: progress from 0.0 to 1.0 based on playback time
+                        ProgressView(value: songProgress)
                             .progressViewStyle(LinearProgressViewStyle(tint: .blue))  // Blue bar style
                             .scaleEffect(y: 2)                      // Make it 2x taller
                         
@@ -168,11 +189,11 @@ struct ActiveRunView: View {
                         // HStack arranges items horizontally (left to right)
                         // Like CSS: display: flex; flex-direction: row;
                         HStack {
-                            Text("1:23")                            // Current time
+                            Text(formatTime(runSessionVM?.currentPlaybackTime ?? 0))  // Current time
                                 .font(.caption)                     // Small font
                                 .foregroundColor(.secondary)
                             Spacer()                                // Pushes items to edges
-                            Text("3:45")                            // Total duration
+                            Text(formatTime(Double(runSessionVM?.currentTrack?.durationSeconds ?? 0)))  // Total duration
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }

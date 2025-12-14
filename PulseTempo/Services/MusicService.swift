@@ -12,6 +12,7 @@ import Combine
 protocol MusicServiceProtocol: AnyObject {
     var playbackStatePublisher: AnyPublisher<PlaybackState, Never> { get }
     var currentTrackPublisher: AnyPublisher<Track?, Never> { get }
+    var currentPlaybackTimePublisher: AnyPublisher<TimeInterval, Never> { get }
     var errorPublisher: AnyPublisher<Error?, Never> { get }
     func play(track: Track, completion: @escaping (Result<Void, Error>) -> Void)
     func playQueue(tracks: [Track], startIndex: Int, completion: @escaping (Result<Void, Error>) -> Void)
@@ -76,6 +77,10 @@ class MusicService: ObservableObject, MusicServiceProtocol {
         $error.eraseToAnyPublisher()
     }
     
+    var currentPlaybackTimePublisher: AnyPublisher<TimeInterval, Never> {
+        $currentPlaybackTime.eraseToAnyPublisher()
+    }
+    
     // MARK: - Private Properties
     
     /// Reference to the MusicKit authorization manager
@@ -88,6 +93,21 @@ class MusicService: ObservableObject, MusicServiceProtocol {
     /// Queue of tracks to be played
     /// We maintain our own queue to have more control over track selection
     internal var trackQueue: [Track] = []
+    
+    /// Cached catalog Song for the currently playing track
+    /// This is needed because queue rebuilding requires the original Song object,
+    /// not one extracted from currentEntry (which causes MPMusicPlayerControllerErrorDomain error 6)
+    private var currentCatalogSong: Song?
+    
+    /// Timestamp when playback started - used to delay queue modifications
+    /// MusicKit needs time to establish the queue before accepting insert operations
+    private var playbackStartTime: Date?
+    
+    /// Minimum delay after playback starts before queue modifications are allowed (in seconds)
+    private let queueReadyDelay: TimeInterval = 2.0
+    
+    /// Track the last song ID we logged to prevent duplicate "NOW PLAYING" logs
+    private var lastLoggedSongId: String?
     
     /// Set to track Combine subscriptions
     private var cancellables = Set<AnyCancellable>()
@@ -126,27 +146,37 @@ class MusicService: ObservableObject, MusicServiceProtocol {
             return
         }
         
+        print("🎵 Starting play for: '\(track.title)' by \(track.artist)")
+        
         Task {
             do {
                 // Search for the track in Apple Music catalog
                 // We need to convert our Track model to a MusicKit Song
+                print("🔍 Searching catalog for: '\(track.title)'")
                 let musicTrack = try await searchForTrack(track)
+                print("✅ Catalog search successful, creating queue...")
                 
                 // Set the player queue with this track
                 player.queue = ApplicationMusicPlayer.Queue(for: [musicTrack], startingAt: musicTrack)
+                print("✅ Queue created, attempting playback...")
                 
                 // Start playback
                 try await player.play()
+                print("✅ Playback started successfully")
                 
                 // Update our state
+                // NOTE: Don't set currentTrack here - let updateCurrentTrack() handle it
+                // via the queue observer to prevent duplicate publisher emissions
                 await MainActor.run {
-                    self.currentTrack = track
+                    self.currentCatalogSong = musicTrack  // Cache for queue operations
+                    self.playbackStartTime = Date()       // Mark when playback started
                     self.playbackState = .playing
                     self.startPlaybackTimer()
                 }
                 
                 completion(.success(()))
             } catch {
+                print("❌ Play failed: \(error.localizedDescription)")
                 await MainActor.run {
                     self.error = error
                     completion(.failure(error))
@@ -194,9 +224,12 @@ class MusicService: ObservableObject, MusicServiceProtocol {
                 try await player.play()
                 
                 // Update state
+                // NOTE: Don't set currentTrack here - let updateCurrentTrack() handle it
+                // via the queue observer to prevent duplicate publisher emissions
                 await MainActor.run {
                     self.trackQueue = tracks
-                    self.currentTrack = tracks[startIndex]
+                    self.currentCatalogSong = musicTracks[startIndex]  // Cache for queue operations
+                    self.playbackStartTime = Date()                    // Mark when playback started
                     self.playbackState = .playing
                     self.startPlaybackTimer()
                 }
@@ -255,6 +288,9 @@ class MusicService: ObservableObject, MusicServiceProtocol {
             await MainActor.run {
                 self.playbackState = .stopped
                 self.currentTrack = nil
+                self.currentCatalogSong = nil    // Clear cached song
+                self.playbackStartTime = nil     // Clear playback timing
+                self.lastLoggedSongId = nil      // Reset for next session
                 self.currentPlaybackTime = 0
                 self.stopPlaybackTimer()
             }
@@ -367,52 +403,71 @@ class MusicService: ObservableObject, MusicServiceProtocol {
     /// Use this for dynamic HR-based track selection during workouts.
     ///
     /// **Implementation Note:**
-    /// MusicKit doesn't provide a direct way to remove queue entries, so we rebuild
-    /// the queue as [currentTrack, newNextTrack]. This ensures queue size stays at 1
-    /// after the current track. Playback position is preserved to minimize disruption.
+    /// MusicKit's Queue API is limited - there's no way to remove specific entries.
+    /// We use `insert(_, position: .afterCurrentEntry)` which effectively "replaces"
+    /// the next track since the player will play the most recently inserted track next.
+    /// 
+    /// **Why not rebuild the queue?**
+    /// Rebuilding the queue during active playback with `startingAt:` causes
+    /// MPMusicPlayerControllerErrorDomain error 6 ("Prepare queue failed with unexpected start item")
+    /// because the Song object from currentEntry is not the same reference MusicKit expects.
     ///
-    /// **Trade-off:**
-    /// Rebuilding may cause a brief audio hiccup. To minimize this, only call when
-    /// the desired next track actually changes (guard against repeated calls).
-    ///
-    /// - Parameter track: Track to queue as the only next track
+    /// - Parameter track: Track to queue as the next track
     @MainActor
     func replaceNext(track: Track) {
         Task {
             do {
+                // Check if queue is ready for modifications
+                // MusicKit needs time to establish the queue after play() is called
+                if let startTime = self.playbackStartTime {
+                    let elapsed = Date().timeIntervalSince(startTime)
+                    if elapsed < queueReadyDelay {
+                        let waitTime = queueReadyDelay - elapsed
+                        print("⏳ Waiting \(String(format: "%.1f", waitTime))s for queue to be ready...")
+                        try await Task.sleep(nanoseconds: UInt64(waitTime * 1_000_000_000))
+                    }
+                }
+                
+                // Validate we can find the track in Apple Music before attempting queue operations
                 let musicTrack = try await searchForTrack(track)
                 
-                // Strategy: Rebuild queue with [currentTrack, newNextTrack]
-                // This ensures queue size of 1 after current track
-                if let currentEntry = player.queue.currentEntry,
-                   let currentItem = currentEntry.item {
-                    
+                // Check if we have an active playback
+                let isPlaying = self.playbackState == .playing || self.playbackState == .paused
+                
+                // Get current track name for logging
+                let currentTrackName = self.currentTrack?.title ?? "Unknown"
+                
+                if isPlaying, self.currentCatalogSong != nil {
+                    // ACTIVE PLAYBACK: Use insert instead of queue rebuild
+                    // This avoids the "Prepare queue failed with unexpected start item" error
+                    // Note: MusicKit will play the most recently inserted track next
+                    try await player.queue.insert(musicTrack, position: .afterCurrentEntry)
+                    print("🎵 Inserted next track after current entry | Playing: '\(currentTrackName)'")
+                } else if let cachedSong = self.currentCatalogSong {
+                    // STOPPED: Safe to rebuild queue since nothing is playing
                     // Store current playback time to restore position
                     let currentPlaybackTime = player.playbackTime
                     
-                    // Attempt to unwrap the current queue item as a Song
-                    if case let .song(currentSong) = currentItem {
-                        // Create new queue with only current + new next track using Songs
-                        player.queue = ApplicationMusicPlayer.Queue(
-                            for: [currentSong, musicTrack],
-                            startingAt: currentSong
-                        )
-                        
-                        // Restore playback position (MusicKit should preserve this)
-                        player.playbackTime = currentPlaybackTime
-                        
-                        // Resume playback if it was playing
-                        if self.playbackState == .playing {
-                            try await player.play()
-                        }
-                        
-                        print("♻️ Rebuilt queue: Current + 1 next track (size=2, queued=1)")
-                    } else {
-                        // Fallback: if the current item isn't a Song, insert after current entry
-                        try await player.queue.insert(musicTrack, position: .afterCurrentEntry)
+                    // Verify both songs have valid identifiers before rebuilding
+                    guard !cachedSong.id.rawValue.isEmpty,
+                          !musicTrack.id.rawValue.isEmpty else {
+                        print("⚠️ Skipping queue rebuild - invalid track identifiers")
+                        return
                     }
+                    
+                    // Create new queue with only current + new next track using cached Song
+                    player.queue = ApplicationMusicPlayer.Queue(
+                        for: [cachedSong, musicTrack],
+                        startingAt: cachedSong
+                    )
+                    
+                    // Restore playback position
+                    player.playbackTime = currentPlaybackTime
+                    
+                    print("♻️ Rebuilt queue: Current + 1 next track (size=2, queued=1)")
                 } else {
-                    // No current track, just insert normally
+                    // No cached song - insert after current entry
+                    print("ℹ️ No cached song, inserting after current entry")
                     try await player.queue.insert(musicTrack, position: .afterCurrentEntry)
                 }
                 
@@ -528,13 +583,14 @@ class MusicService: ObservableObject, MusicServiceProtocol {
                 let tracksResponse = try decoder.decode(LibraryTracksResponse.self, from: response.data)
                 
                 // Convert to our Track model
+                // TODO: Replace BPMEstimator with backend API call when Phase 2.3 is complete
                 let tracks = tracksResponse.data.map { track in
                     Track(
                         id: track.id,
                         title: track.attributes.name,
                         artist: track.attributes.artistName,
                         durationSeconds: Int(track.attributes.durationInMillis / 1000),
-                        bpm: nil // BPM will be fetched from backend later
+                        bpm: BPMEstimator.estimate(title: track.attributes.name, artist: track.attributes.artistName)
                     )
                 }
                 
@@ -571,9 +627,11 @@ class MusicService: ObservableObject, MusicServiceProtocol {
         // Try to find the best match
         // Ideally we'd use the track ID if we have it from Apple Music
         guard let song = response.songs.first else {
+            print("❌ Failed to find '\(track.title)' by \(track.artist) in Apple Music catalog")
             throw MusicKitError.itemNotFound
         }
         
+        print("✅ Found catalog match: '\(track.title)' (ID: \(song.id.rawValue))")
         return song
     }
     
@@ -586,6 +644,7 @@ class MusicService: ObservableObject, MusicServiceProtocol {
     private func setupPlaybackObservers() {
         // Observe playback state changes
         player.state.objectWillChange
+            .debounce(for: .milliseconds(100), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in
                 Task { @MainActor in
                     self?.updatePlaybackState()
@@ -593,12 +652,26 @@ class MusicService: ObservableObject, MusicServiceProtocol {
             }
             .store(in: &cancellables)
         
-        // Observe queue changes
+        // Observe queue changes (debounce and deduplicate to prevent duplicate processing)
         player.queue.objectWillChange
-            .sink { [weak self] _ in
-                Task { @MainActor in
-                    self?.updateCurrentTrack()
+            .debounce(for: .milliseconds(100), scheduler: DispatchQueue.main)
+            .compactMap { [weak self] _ -> String? in
+                // Extract SONG ID (not Entry ID) for deduplication
+                // Entry IDs change when MusicKit creates new queue entries for the same song
+                guard let entry = self?.player.queue.currentEntry,
+                      let item = entry.item else {
+                    return nil
                 }
+                if case .song(let song) = item {
+                    return song.id.rawValue
+                }
+                return nil
+            }
+            .removeDuplicates()
+            .sink { [weak self] _ in
+                // Already on main thread via scheduler, call directly without Task wrapper
+                // to avoid race conditions from separate async contexts
+                self?.updateCurrentTrack()
             }
             .store(in: &cancellables)
     }
@@ -628,24 +701,47 @@ class MusicService: ObservableObject, MusicServiceProtocol {
     }
     
     /// Update current track based on player queue
-    @MainActor
+    /// NOTE: Not @MainActor - called synchronously from main queue via Combine sink
     private func updateCurrentTrack() {
         if let currentEntry = player.queue.currentEntry, let item = currentEntry.item {
             switch item {
             case .song(let song):
+                let songIdString = song.id.rawValue
+                
+                // Early exit if we've already processed this exact song (prevents duplicate processing)
+                guard lastLoggedSongId != songIdString else {
+                    return
+                }
+                
+                // Mark this song as processed immediately to prevent duplicate calls
+                lastLoggedSongId = songIdString
+                
+                // Update the cached catalog song for future queue operations
+                // This ensures replaceNext() works correctly after skips or natural track progression
+                currentCatalogSong = song
+                
+                // Reset playback timing for queue ready delay
+                playbackStartTime = Date()
+                
                 // Try to find matching track in our queue
-                if let matchingTrack = trackQueue.first(where: { $0.id == song.id.rawValue }) {
+                if let matchingTrack = trackQueue.first(where: { $0.id == songIdString }) {
                     currentTrack = matchingTrack
                 } else {
                     // Create a new track from the song
                     currentTrack = Track(
-                        id: song.id.rawValue,
+                        id: songIdString,
                         title: song.title,
                         artist: song.artistName,
                         durationSeconds: Int(song.duration ?? 0),
                         bpm: nil
                     )
                 }
+                
+                // Log the new song
+                let duration = song.duration.map { Int($0) } ?? 0
+                let minutes = duration / 60
+                let seconds = duration % 60
+                print("▶️ NOW PLAYING: '\(song.title)' by \(song.artistName) [\(minutes):\(String(format: "%02d", seconds))]")
             default:
                 break
             }

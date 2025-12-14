@@ -387,6 +387,34 @@ Add guards - Check array bounds before removing items
 Synchronize state - Ensure all three data structures update atomically
 Add logging - Track state changes for debugging
 
+### Known Bugs 🐛
+
+#### Duplicate "NOW PLAYING" Log (Low Priority)
+**Status:** Partially Fixed | **Severity:** Cosmetic (logging only)
+
+**Symptom:** When a new track starts playing, the "▶️ NOW PLAYING" log appears twice in the console.
+
+**Root Cause:** MusicKit's `player.queue.objectWillChange` fires multiple times for a single track change. Despite adding:
+- `removeDuplicates()` based on song ID
+- `debounce(for: .milliseconds(100))`
+- `lastLoggedSongId` guard in `updateCurrentTrack()`
+- Removing `@MainActor` to make calls synchronous
+
+The duplicate still occurs, suggesting MusicKit emits queue change events with different internal state before the song ID becomes consistent.
+
+**Impact:** 
+- ✅ "Marked as played" tracking works correctly (1 per track)
+- ✅ Playback functionality unaffected
+- ⚠️ Console logs show duplicate "NOW PLAYING" (cosmetic only)
+
+**Fix Attempts:**
+1. Added `removeDuplicates()` with song ID extraction - Partial improvement
+2. Removed `Task { @MainActor in }` wrapper - Partial improvement
+3. Removed `currentTrack` assignment from `play()` - Partial improvement
+4. Removed `@MainActor` from `updateCurrentTrack()` - No additional improvement
+
+**Future Investigation:** May require deeper MusicKit queue observer behavior analysis or switching to `player.state.playbackStatus` observation instead.
+
 ### Testing Tools & Frameworks
 
 **Recommended:**
@@ -941,4 +969,4 @@ PulseTempoWatch/
 ---
 
 **Last Updated:** December 12, 2024  
-**Version:** 1.4 - Garmin Venu 3S integration complete! Added wearable device selection (Apple Watch, Garmin Venu 3S, Demo Mode) with HealthKit sync. Phase 1.4 testing: 119 tests (115 passing, 4 skipped).
+**Version:** 1.5 - Temporary BPM fix implemented! Created `BPMEstimator.swift` utility with genre-based heuristics to provide placeholder BPM values until backend (Phase 2.3) is ready. Updated `MusicService` and `RunSessionViewModel` with enhanced error handling and validation. Music playback now functional for manual testing. Phase 1.4 testing: 119 tests (115 passing, 4 skipped).
