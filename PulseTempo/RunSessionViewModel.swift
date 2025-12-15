@@ -127,7 +127,7 @@ final class RunSessionViewModel: ObservableObject {
     init(
         tracks: [Track] = [],
         heartRateService: HeartRateServiceProtocol = HeartRateService(),
-        musicService: MusicServiceProtocol = MusicService()
+        musicService: MusicServiceProtocol = MusicService.shared,
     ) {
         self.heartRateService = heartRateService
         self.musicService = musicService
@@ -206,6 +206,14 @@ final class RunSessionViewModel: ObservableObject {
                 self?.errorMessage = "Music Error: \(error.localizedDescription)"
             }
             .store(in: &cancellables)
+            
+        // OBSERVE TRACK UPDATES (BPM ANALYSIS)
+        musicService.trackUpdatedPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] updatedTrack in
+                self?.handleTrackUpdate(updatedTrack)
+            }
+            .store(in: &cancellables)
     }
     
     // PRIVATE METHOD: createFakeTracks
@@ -228,42 +236,48 @@ final class RunSessionViewModel: ObservableObject {
                 title: "Eye of the Tiger",
                 artist: "Survivor",
                 durationSeconds: 245,
-                bpm: 109
+                bpm: 109,
+                artworkURL: nil
             ),
             Track(
                 id: "2",
                 title: "Stronger",
                 artist: "Kanye West",
                 durationSeconds: 312,
-                bpm: 104
+                bpm: 104,
+                artworkURL: nil
             ),
             Track(
                 id: "3",
                 title: "Lose Yourself",
                 artist: "Eminem",
                 durationSeconds: 326,
-                bpm: 171
+                bpm: 171,
+                artworkURL: nil
             ),
             Track(
                 id: "4",
                 title: "Can't Stop",
                 artist: "Red Hot Chili Peppers",
                 durationSeconds: 269,
-                bpm: 126
+                bpm: 126,
+                artworkURL: nil
             ),
             Track(
                 id: "5",
                 title: "Till I Collapse",
                 artist: "Eminem",
                 durationSeconds: 297,
-                bpm: 166
+                bpm: 166,
+                artworkURL: nil
             ),
             Track(
                 id: "6",
                 title: "Thunder",
                 artist: "Imagine Dragons",
                 durationSeconds: 187,
-                bpm: 85
+                bpm: 85,
+                artworkURL: nil
             )
         ]
     }
@@ -734,6 +748,68 @@ private extension RunSessionViewModel {
         navigationQueue.async {
             DispatchQueue.main.async {
                 completion()
+            }
+        }
+    }
+    
+    // MARK: - Track Updates
+    
+    /// Handle track updates from MusicService (e.g. BPM analysis completion)
+    private func handleTrackUpdate(_ updatedTrack: Track) {
+        print("🔄 Received track update for '\(updatedTrack.title)' (BPM: \(updatedTrack.bpm ?? 0))")
+        
+        // Update in main tracks list
+        if let index = tracks.firstIndex(where: { $0.id == updatedTrack.id }) {
+            tracks[index] = updatedTrack
+        }
+        
+        // Update in played tracks history
+        if let index = tracksPlayed.firstIndex(where: { $0.id == updatedTrack.id }) {
+            tracksPlayed[index] = updatedTrack
+        }
+        
+        // Update internal history
+        navigationQueue.async { [weak self] in
+            guard let self else { return }
+            if let index = self.tracksPlayedInternal.firstIndex(where: { $0.id == updatedTrack.id }) {
+                self.tracksPlayedInternal[index] = updatedTrack
+            }
+            
+            // If this is the currently playing track, update it too
+            // Match by ID or by title+artist (library IDs differ from catalog IDs)
+            let currentTitle = self.currentTrack?.title.lowercased()
+            let currentArtist = self.currentTrack?.artist.lowercased()
+            let updateTitle = updatedTrack.title.lowercased()
+            let updateArtist = updatedTrack.artist.lowercased()
+            
+            let isCurrentTrack = self.currentTrack?.id == updatedTrack.id ||
+                (currentTitle == updateTitle && currentArtist == updateArtist)
+            
+            print("🔍 Track update check: current='\(self.currentTrack?.title ?? "nil")' vs update='\(updatedTrack.title)' | Match: \(isCurrentTrack)")
+            
+            if isCurrentTrack {
+                DispatchQueue.main.async {
+                    // Preserve artwork from current track if updated track doesn't have it
+                    let artworkURL = updatedTrack.artworkURL ?? self.currentTrack?.artworkURL
+                    self.currentTrack = Track(
+                        id: updatedTrack.id,
+                        title: updatedTrack.title,
+                        artist: updatedTrack.artist,
+                        durationSeconds: updatedTrack.durationSeconds,
+                        bpm: updatedTrack.bpm,
+                        artworkURL: artworkURL,
+                        isSkipped: updatedTrack.isSkipped
+                    )
+                }
+            }
+            
+            // If this is the queued next track, update it
+            let isQueuedTrack = self.queuedNextTrack?.id == updatedTrack.id ||
+                (self.queuedNextTrack?.title.lowercased() == updatedTrack.title.lowercased() &&
+                 self.queuedNextTrack?.artist.lowercased() == updatedTrack.artist.lowercased())
+            
+            if isQueuedTrack {
+                self.queuedNextTrack = updatedTrack
             }
         }
     }

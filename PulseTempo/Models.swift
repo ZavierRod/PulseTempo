@@ -36,7 +36,19 @@ struct Track: Identifiable, Equatable, Hashable {
     let artist: String                // Artist name
     let durationSeconds: Int          // How long the song is in seconds
     let bpm: Int?                     // Beats per minute (? means Optional - can be nil/None)
+    let artworkURL: URL?              // Album artwork URL
     var isSkipped: Bool = false       // Has user skipped this? (default value = false)
+    
+    // Custom initializer with default value for artworkURL
+    init(id: String, title: String, artist: String, durationSeconds: Int, bpm: Int?, artworkURL: URL? = nil, isSkipped: Bool = false) {
+        self.id = id
+        self.title = title
+        self.artist = artist
+        self.durationSeconds = durationSeconds
+        self.bpm = bpm
+        self.artworkURL = artworkURL
+        self.isSkipped = isSkipped
+    }
 }
 
 // DATA MODEL: Playlist

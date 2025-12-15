@@ -31,7 +31,8 @@ struct PlaylistSongsView: View {
     @State private var errorMessage: String?
     
     /// Music service for fetching tracks
-    @StateObject private var musicService = MusicService()
+    /// Music service for playback
+    @ObservedObject private var musicService = MusicService.shared
     
     // MARK: - Body
     
@@ -66,6 +67,11 @@ struct PlaylistSongsView: View {
         }
         .onAppear {
             fetchTracks()
+        }
+        .onReceive(musicService.trackUpdatedPublisher) { updatedTrack in
+            if let index = tracks.firstIndex(where: { $0.id == updatedTrack.id }) {
+                tracks[index] = updatedTrack
+            }
         }
     }
     

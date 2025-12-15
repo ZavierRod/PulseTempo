@@ -2,10 +2,12 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies (including ffmpeg for audio processing)
 RUN apt-get update && apt-get install -y \
     build-essential \
     libpq-dev \
+    ffmpeg \
+    libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies

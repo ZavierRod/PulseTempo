@@ -20,38 +20,32 @@ import SwiftUI  // Apple's declarative UI framework
 // - Imperative: You manually update UI elements (like button.setText("Play"))
 struct ActiveRunView: View {
     
-    // PARAMETERS
-    // Tracks to use for the workout session
-    let tracks: [Track]
-    
     // ENVIRONMENT
     // @Environment allows access to system-wide values
     // dismiss is used to close/pop the current view
     @Environment(\.dismiss) private var dismiss
     
     // STATE MANAGEMENT
-    // @State is a property wrapper for local state that the View owns
-    // When @State changes, SwiftUI automatically re-renders the View
-    //
-    // Python/React analogy:
-    // Like React's useState hook or Vue's reactive data
-    // When you change these values, the UI automatically updates
-    //
-    // "private" means only this View can modify these values
-    @State private var bpm: Int = 152           // Current heart rate (beats per minute)
-    @State private var timer: Timer?            // Timer for simulating heart rate changes
-    @State private var runSessionVM: RunSessionViewModel?  // Initialized in onAppear with tracks
+    // @StateObject is used for ObservableObject classes that the View owns
+    // When any @Published property changes, SwiftUI automatically re-renders
+    @StateObject private var runSessionVM: RunSessionViewModel
+    
+    // INITIALIZER
+    // Create the ViewModel with tracks when the view is created
+    init(tracks: [Track]) {
+        // _runSessionVM accesses the underlying StateObject wrapper
+        _runSessionVM = StateObject(wrappedValue: RunSessionViewModel(tracks: tracks))
+    }
     
     // COMPUTED PROPERTIES
     
     /// Calculate song progress as a value from 0.0 to 1.0
     private var songProgress: Double {
-        guard let vm = runSessionVM,
-              let track = vm.currentTrack,
+        guard let track = runSessionVM.currentTrack,
               track.durationSeconds > 0 else {
             return 0.0
         }
-        let progress = vm.currentPlaybackTime / Double(track.durationSeconds)
+        let progress = runSessionVM.currentPlaybackTime / Double(track.durationSeconds)
         return min(max(progress, 0.0), 1.0)  // Clamp between 0 and 1
     }
     
@@ -115,11 +109,11 @@ struct ActiveRunView: View {
                         // They chain together (like method chaining in Python/pandas)
                         .font(.system(size: 40))                    // Set icon size
                         .foregroundColor(.red)                       // Make it red
-                        .symbolEffect(.pulse, value: bpm)            // Animate when bpm changes
+                        .symbolEffect(.pulse, value: runSessionVM.currentHeartRate)  // Animate when HR changes
                     
                     // BPM NUMBER DISPLAY
                     // \(bpm) is string interpolation (like f"{bpm}" in Python)
-                    Text("\(bpm)")
+                    Text("\(runSessionVM.currentHeartRate)")
                         .font(.system(size: 72, weight: .bold, design: .rounded))  // Large, bold, rounded font
                         .foregroundColor(.primary)                   // Primary color (adapts to light/dark mode)
                     
@@ -145,36 +139,73 @@ struct ActiveRunView: View {
                 // ═══════════════════════════════════════════════════════════
                 VStack(spacing: 16) {
                     
-                    // ALBUM COVER ART (Placeholder)
-                    // Creates a rounded square with a music icon
-                    RoundedRectangle(cornerRadius: 12)              // Rounded corners with 12pt radius
-                        .fill(Color.gray.opacity(0.3))              // Semi-transparent gray fill
-                        .frame(width: 120, height: 120)             // 120x120 points square
-                        .overlay(                                   // Add content on top
-                            Image(systemName: "music.note")         // Music note icon
-                                .font(.system(size: 40))
-                                .foregroundColor(.gray)
-                        )
+                    // ALBUM COVER ART
+                    // Display actual artwork if available, otherwise show placeholder
+                    if let artworkURL = runSessionVM.currentTrack?.artworkURL {
+                        AsyncImage(url: artworkURL) { phase in
+                            switch phase {
+                            case .success(let image):
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                            case .failure(_):
+                                // Fallback to placeholder on error
+                                Image(systemName: "music.note")
+                                    .font(.system(size: 40))
+                                    .foregroundColor(.gray)
+                            case .empty:
+                                // Loading state
+                                ProgressView()
+                            @unknown default:
+                                Image(systemName: "music.note")
+                                    .font(.system(size: 40))
+                                    .foregroundColor(.gray)
+                            }
+                        }
+                        .frame(width: 140, height: 140)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+                    } else {
+                        // Placeholder when no artwork
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.gray.opacity(0.3))
+                            .frame(width: 140, height: 140)
+                            .overlay(
+                                Image(systemName: "music.note")
+                                    .font(.system(size: 40))
+                                    .foregroundColor(.gray)
+                            )
+                    }
                     
                     // SONG INFORMATION
                     VStack(spacing: 4) {
-                        // SONG TITLE
-                        // Uses optional chaining and nil coalescing
-                        // runSessionVM.currentTrack?.title tries to get title
-                        // If currentTrack is nil, the whole expression becomes nil
-                        // ?? "—" provides a default value if nil
-                        //
-                        // Python equivalent:
-                        // title = self.run_session_vm.current_track.title if self.run_session_vm.current_track else "—"
-                        Text(runSessionVM?.currentTrack?.title ?? "—")
-                            .font(.title2)                          // Large title font
-                            .fontWeight(.bold)                      // Bold text
-                            .foregroundColor(.primary)              // Primary text color
+                        // SONG TITLE with BPM
+                        HStack(spacing: 8) {
+                            Text(runSessionVM.currentTrack?.title ?? "—")
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.primary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                                .layoutPriority(-1)  // Yields space to BPM badge
+                            
+                            // BPM Badge - always visible
+                            if let bpm = runSessionVM.currentTrack?.bpm {
+                                Text("\(bpm) BPM")
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Capsule().fill(Color.blue.opacity(0.2)))
+                                    .foregroundColor(.blue)
+                                    .fixedSize()  // Prevents badge from shrinking
+                            }
+                        }
                         
                         // ARTIST NAME
-                        Text(runSessionVM?.currentTrack?.artist ?? "")
-                            .font(.subheadline)                     // Smaller font
-                            .foregroundColor(.secondary)            // Secondary (gray) color
+                        Text(runSessionVM.currentTrack?.artist ?? "")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
                     }
                     
                     // PROGRESS BAR
@@ -189,11 +220,11 @@ struct ActiveRunView: View {
                         // HStack arranges items horizontally (left to right)
                         // Like CSS: display: flex; flex-direction: row;
                         HStack {
-                            Text(formatTime(runSessionVM?.currentPlaybackTime ?? 0))  // Current time
+                            Text(formatTime(runSessionVM.currentPlaybackTime ?? 0))  // Current time
                                 .font(.caption)                     // Small font
                                 .foregroundColor(.secondary)
                             Spacer()                                // Pushes items to edges
-                            Text(formatTime(Double(runSessionVM?.currentTrack?.durationSeconds ?? 0)))  // Total duration
+                            Text(formatTime(Double(runSessionVM.currentTrack?.durationSeconds ?? 0)))  // Total duration
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
@@ -218,7 +249,7 @@ struct ActiveRunView: View {
                         // 1. action: closure (like a lambda in Python) that runs when tapped
                         // 2. label: closure that returns the button's appearance
                         Button(action: {
-                            runSessionVM?.skipToPreviousTrack()
+                            runSessionVM.skipToPreviousTrack()
                         }) {
                             Image(systemName: "backward.fill")
                                 .font(.title2)
@@ -228,11 +259,11 @@ struct ActiveRunView: View {
                         // PLAY/PAUSE BUTTON (Center, larger)
                         Button(action: {
                             // Call the ViewModel method to toggle play/pause
-                            runSessionVM?.togglePlayPause()
+                            runSessionVM.togglePlayPause()
                         }) {
                             // TERNARY OPERATOR (condition ? true_value : false_value)
                             // Like Python: "pause.fill" if self.is_playing else "play.fill"
-                            Image(systemName: runSessionVM?.isPlaying == true ? "pause.fill" : "play.fill")
+                            Image(systemName: runSessionVM.isPlaying == true ? "pause.fill" : "play.fill")
                                 .font(.title)
                                 .foregroundColor(.white)
                                 .frame(width: 56, height: 56)       // Fixed size
@@ -242,7 +273,7 @@ struct ActiveRunView: View {
                         // NEXT BUTTON
                         Button(action: {
                             // Skip to next track, passing current heart rate for matching
-                            runSessionVM?.skipToNextTrack(approximateHeartRate: bpm)
+                            runSessionVM.skipToNextTrack(approximateHeartRate: runSessionVM.currentHeartRate)
                         }) {
                             Image(systemName: "forward.fill")
                                 .font(.title2)
@@ -336,13 +367,8 @@ struct ActiveRunView: View {
         // Python/FastAPI analogy:
         // Like a startup event handler or __enter__ in a context manager
         .onAppear {
-            // Initialize RunSessionViewModel with tracks
-            runSessionVM = RunSessionViewModel(tracks: tracks)
-            
             // Auto-start the run session
-            runSessionVM?.startRun()
-            
-            startHeartRateSimulation()  // Start simulating heart rate changes
+            runSessionVM.startRun()
         }
         // .onDisappear - called when view leaves screen
         // Like React's cleanup function or componentWillUnmount
@@ -350,23 +376,8 @@ struct ActiveRunView: View {
         // Python analogy:
         // Like __exit__ in a context manager or a cleanup/teardown method
         .onDisappear {
-            timer?.invalidate()  // Stop the timer (? safely unwraps Optional)
+            runSessionVM.stopRun()  // Clean up when leaving
         }
     }
     
-    // ═══════════════════════════════════════════════════════════
-    // HELPER METHOD: startHeartRateSimulation
-    private func startHeartRateSimulation() {
-        // Invalidate any existing timer before starting a new one
-        timer?.invalidate()
-
-        // Simulate heart rate changes around the current bpm
-        // Updates once per second with a small random delta, clamped to a sensible range
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-            let delta = Int.random(in: -3...3)
-            let updated = self.bpm + delta
-            // Clamp between 120 and 180 bpm to keep values realistic for a run
-            self.bpm = min(max(updated, 120), 180)
-        }
-    }
 }

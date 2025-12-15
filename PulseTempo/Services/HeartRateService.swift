@@ -477,13 +477,16 @@ class HeartRateService: ObservableObject, HeartRateServiceProtocol {
         demoWorkoutPhase = .warmUp
         isMonitoring = true
         
+        print("🚀 Starting demo mode heart rate simulation...")
+        
         // Start timer to update heart rate every 2 seconds
         demoTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             self?.updateDemoHeartRate()
         }
         
-        // Set initial heart rate
-        currentHeartRate = 100
+        // Set initial resting heart rate
+        currentHeartRate = 65
+        print("💓 Initial HR set to: \(currentHeartRate) BPM")
     }
     
     /// Stop demo mode and clean up
@@ -523,54 +526,85 @@ class HeartRateService: ObservableObject, HeartRateServiceProtocol {
         let elapsed = elapsedOverride ?? Date().timeIntervalSince(startTime)
         
         // Determine workout phase and calculate heart rate
+        // Designed for realistic manual testing: resting -> gradual build -> high intensity
         let baseHeartRate: Double
         
         switch elapsed {
-        case 0..<180:  // 0-3 minutes: Warm-up
+        case 0..<30:  // 0-30 seconds: Resting/Starting
             demoWorkoutPhase = .warmUp
-            // Gradually increase from 100 to 130 BPM
-            baseHeartRate = 100 + (elapsed / 180) * 30
+            // Stay around resting heart rate 62-68 BPM
+            baseHeartRate = 65
             
-        case 180..<600:  // 3-10 minutes: Steady state
+        case 30..<90:  // 30s-1.5min: Beginning to move
+            demoWorkoutPhase = .warmUp
+            // Slowly increase from 65 to 85 BPM (like starting to walk/jog)
+            let progress = (elapsed - 30) / 60
+            baseHeartRate = 65 + (progress * 20)
+            
+        case 90..<180:  // 1.5-3 minutes: Light warm-up
+            demoWorkoutPhase = .warmUp
+            // Increase from 85 to 105 BPM
+            let progress = (elapsed - 90) / 90
+            baseHeartRate = 85 + (progress * 20)
+            
+        case 180..<300:  // 3-5 minutes: Building intensity
             demoWorkoutPhase = .steady
-            // Maintain around 145 BPM with slight variations
-            baseHeartRate = 145
+            // Increase from 105 to 125 BPM
+            let progress = (elapsed - 180) / 120
+            baseHeartRate = 105 + (progress * 20)
             
-        case 600..<720:  // 10-12 minutes: Intense interval
+        case 300..<480:  // 5-8 minutes: Moderate effort
+            demoWorkoutPhase = .steady
+            // Increase from 125 to 140 BPM with some natural oscillation
+            let progress = (elapsed - 300) / 180
+            let oscillation = sin(elapsed / 20) * 3  // Natural breathing rhythm
+            baseHeartRate = 125 + (progress * 15) + oscillation
+            
+        case 480..<600:  // 8-10 minutes: Pushing harder
             demoWorkoutPhase = .intense
-            // Spike to 165 BPM
-            let intervalProgress = (elapsed - 600) / 120
-            baseHeartRate = 145 + (intervalProgress * 20)
+            // Increase from 140 to 150 BPM
+            let progress = (elapsed - 480) / 120
+            let oscillation = sin(elapsed / 15) * 4
+            baseHeartRate = 140 + (progress * 10) + oscillation
             
-        case 720..<840:  // 12-14 minutes: Recovery
+        case 600..<720:  // 10-12 minutes: High intensity
+            demoWorkoutPhase = .intense
+            // Peak around 150-160 BPM with natural variation
+            let oscillation = sin(elapsed / 12) * 5
+            baseHeartRate = 155 + oscillation
+            
+        case 720..<840:  // 12-14 minutes: Slight recovery
             demoWorkoutPhase = .recovery
-            // Drop back to 140 BPM
-            let recoveryProgress = (elapsed - 720) / 120
-            baseHeartRate = 165 - (recoveryProgress * 25)
+            // Drop to 140-145 BPM (active recovery)
+            let progress = (elapsed - 720) / 120
+            baseHeartRate = 155 - (progress * 12)
             
-        case 840..<960:  // 14-16 minutes: Steady again
-            demoWorkoutPhase = .steady
-            baseHeartRate = 145
-            
-        case 960..<1080:  // 16-18 minutes: Another intense interval
+        case 840..<960:  // 14-16 minutes: Push again
             demoWorkoutPhase = .intense
-            let intervalProgress = (elapsed - 960) / 120
-            baseHeartRate = 145 + (intervalProgress * 25)
+            // Back up to 150-155 BPM
+            let progress = (elapsed - 840) / 120
+            let oscillation = sin(elapsed / 10) * 4
+            baseHeartRate = 143 + (progress * 12) + oscillation
             
-        default:  // 18+ minutes: Cool down
-            demoWorkoutPhase = .coolDown
-            // Gradually decrease from 145 to 100 BPM
-            let coolDownProgress = min((elapsed - 1080) / 300, 1.0)  // 5 min cool down
-            baseHeartRate = 145 - (coolDownProgress * 45)
+        default:  // 16+ minutes: Maintain high intensity
+            demoWorkoutPhase = .intense
+            // Oscillate around 150 BPM
+            let oscillation = sin(elapsed / 15) * 6
+            baseHeartRate = 150 + oscillation
         }
         
-        // Add natural variation (±3-5 BPM)
-        let variation = Double.random(in: -4...4)
-        let finalHeartRate = Int(baseHeartRate + variation)
+        // Add natural micro-variations (like real heart rate)
+        // Combines:
+        // 1. Small random noise (±2 BPM)
+        // 2. Occasional slightly larger jumps (simulates effort changes)
+        let noise = Double.random(in: -2...2)
+        let occasionalJump = Double.random(in: 0...1) < 0.1 ? Double.random(in: -4...4) : 0
+        let finalHeartRate = Int(baseHeartRate + noise + occasionalJump)
         
         // Update on main thread
         DispatchQueue.main.async {
-            self.currentHeartRate = max(60, min(200, finalHeartRate))  // Clamp to realistic range
+            self.currentHeartRate = max(55, min(180, finalHeartRate))  // Clamp to realistic range
+            print("💓 Demo HR: \(self.currentHeartRate) BPM (elapsed: \(Int(elapsed))s, phase: \(self.demoWorkoutPhase))")
         }
     }
 

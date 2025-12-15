@@ -42,13 +42,16 @@ final class PlaylistSelectionViewModel: ObservableObject {
     /// Estimated total tracks from selected playlists
     @Published var estimatedTrackCount: Int = 0
     
+    /// Whether BPM analysis is currently in progress
+    @Published var isAnalyzing: Bool = false
+    
     // ═══════════════════════════════════════════════════════════
     // PRIVATE PROPERTIES
     // ═══════════════════════════════════════════════════════════
     // MARK: - Private Properties
     
     /// Music service for fetching playlists
-    private let musicService = MusicService()
+    private let musicService = MusicService.shared
     
     /// Combine subscriptions
     private var cancellables = Set<AnyCancellable>()
@@ -84,6 +87,12 @@ final class PlaylistSelectionViewModel: ObservableObject {
                 self?.errorMessage = error.localizedDescription
             }
             .store(in: &cancellables)
+            
+        // Observe analysis status
+        musicService.$analyzingTrackCount
+            .map { $0 > 0 }
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$isAnalyzing)
     }
     
     // ═══════════════════════════════════════════════════════════

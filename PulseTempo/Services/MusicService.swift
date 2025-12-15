@@ -13,7 +13,9 @@ protocol MusicServiceProtocol: AnyObject {
     var playbackStatePublisher: AnyPublisher<PlaybackState, Never> { get }
     var currentTrackPublisher: AnyPublisher<Track?, Never> { get }
     var currentPlaybackTimePublisher: AnyPublisher<TimeInterval, Never> { get }
+
     var errorPublisher: AnyPublisher<Error?, Never> { get }
+    var trackUpdatedPublisher: AnyPublisher<Track, Never> { get }
     func play(track: Track, completion: @escaping (Result<Void, Error>) -> Void)
     func playQueue(tracks: [Track], startIndex: Int, completion: @escaping (Result<Void, Error>) -> Void)
     func playNext(track: Track)
@@ -44,11 +46,17 @@ protocol MusicServiceProtocol: AnyObject {
 /// ```
 class MusicService: ObservableObject, MusicServiceProtocol {
     
+    /// Shared singleton instance
+    static let shared = MusicService()
+    
     // MARK: - Published Properties
     
     /// The currently playing track
     /// SwiftUI views can observe this to update the UI when the track changes
     @Published var currentTrack: Track?
+    
+    /// Number of tracks currently being analyzed for BPM
+    @Published var analyzingTrackCount: Int = 0
     
     /// Current playback state (playing, paused, stopped)
     @Published var playbackState: PlaybackState = .stopped
@@ -64,7 +72,10 @@ class MusicService: ObservableObject, MusicServiceProtocol {
     
     /// Whether we're currently loading data
     @Published var isLoading: Bool = false
-
+    
+    /// Subject for broadcasting track updates (e.g. BPM analysis results)
+    private let trackUpdatedSubject = PassthroughSubject<Track, Never>()
+    
     var playbackStatePublisher: AnyPublisher<PlaybackState, Never> {
         $playbackState.eraseToAnyPublisher()
     }
@@ -79,6 +90,10 @@ class MusicService: ObservableObject, MusicServiceProtocol {
     
     var currentPlaybackTimePublisher: AnyPublisher<TimeInterval, Never> {
         $currentPlaybackTime.eraseToAnyPublisher()
+    }
+    
+    var trackUpdatedPublisher: AnyPublisher<Track, Never> {
+        trackUpdatedSubject.eraseToAnyPublisher()
     }
     
     // MARK: - Private Properties
@@ -150,6 +165,24 @@ class MusicService: ObservableObject, MusicServiceProtocol {
         
         Task {
             do {
+                // Set trackQueue BEFORE playback so updateCurrentTrack() can match
+                await MainActor.run {
+                    // Add to queue if not already present (match by title+artist since IDs differ)
+                    let existingIndex = self.trackQueue.firstIndex(where: { 
+                        $0.id == track.id || 
+                        ($0.title.lowercased() == track.title.lowercased() && $0.artist.lowercased() == track.artist.lowercased()) 
+                    })
+                    
+                    if let index = existingIndex {
+                        // Update existing track with latest data (e.g., BPM)
+                        self.trackQueue[index] = track
+                    } else {
+                        // Add new track
+                        self.trackQueue.append(track)
+                    }
+                    print("📋 Track queue updated: '\(track.title)' (BPM: \(track.bpm?.description ?? "nil")) | Queue size: \(self.trackQueue.count)")
+                }
+                
                 // Search for the track in Apple Music catalog
                 // We need to convert our Track model to a MusicKit Song
                 print("🔍 Searching catalog for: '\(track.title)'")
@@ -217,17 +250,21 @@ class MusicService: ObservableObject, MusicServiceProtocol {
                     musicTracks.append(musicTrack)
                 }
                 
+                // Set trackQueue BEFORE playback starts so updateCurrentTrack() can match
+                await MainActor.run {
+                    self.trackQueue = tracks
+                }
+                
                 // Set the player queue
                 player.queue = ApplicationMusicPlayer.Queue(for: musicTracks, startingAt: musicTracks[startIndex])
                 
                 // Start playback
                 try await player.play()
                 
-                // Update state
+                // Update remaining state after playback starts
                 // NOTE: Don't set currentTrack here - let updateCurrentTrack() handle it
                 // via the queue observer to prevent duplicate publisher emissions
                 await MainActor.run {
-                    self.trackQueue = tracks
                     self.currentCatalogSong = musicTracks[startIndex]  // Cache for queue operations
                     self.playbackStartTime = Date()                    // Mark when playback started
                     self.playbackState = .playing
@@ -574,7 +611,8 @@ class MusicService: ObservableObject, MusicServiceProtocol {
         Task {
             do {
                 // Request tracks from the specific library playlist
-                let url = URL(string: "https://api.music.apple.com/v1/me/library/playlists/\(playlistId)/tracks")!
+                // Include catalog relationship to get preview URLs
+                let url = URL(string: "https://api.music.apple.com/v1/me/library/playlists/\(playlistId)/tracks?include=catalog")!
                 var request = MusicDataRequest(urlRequest: URLRequest(url: url))
                 let response = try await request.response()
                 
@@ -583,16 +621,44 @@ class MusicService: ObservableObject, MusicServiceProtocol {
                 let tracksResponse = try decoder.decode(LibraryTracksResponse.self, from: response.data)
                 
                 // Convert to our Track model
-                // TODO: Replace BPMEstimator with backend API call when Phase 2.3 is complete
+                // BPM starts as nil - will be populated by backend analysis
                 let tracks = tracksResponse.data.map { track in
                     Track(
                         id: track.id,
                         title: track.attributes.name,
                         artist: track.attributes.artistName,
                         durationSeconds: Int(track.attributes.durationInMillis / 1000),
-                        bpm: BPMEstimator.estimate(title: track.attributes.name, artist: track.attributes.artistName)
+                        bpm: nil,  // Backend BPM analysis will update this
+                        artworkURL: nil  // Artwork loaded when track plays
                     )
                 }
+                
+                // Trigger background BPM analysis
+                print("🔍 Checking \(tracks.count) tracks for preview URLs...")
+                var tracksWithPreviews = 0
+                
+                for track in tracks {
+                    if let trackItem = tracksResponse.data.first(where: { $0.id == track.id }) {
+                        // Try to get preview from library item first, then fallback to catalog item
+                        var previewUrl = trackItem.attributes.previews?.first?.url
+                        
+                        if previewUrl == nil {
+                            // Check catalog relationship
+                            previewUrl = trackItem.relationships?.catalog?.data?.first?.attributes.previews?.first?.url
+                        }
+                        
+                        if let finalPreviewUrl = previewUrl {
+                            tracksWithPreviews += 1
+                            print("✨ Found preview for '\(track.title)': \(finalPreviewUrl)")
+                            Task {
+                                await self.analyzeTrackBPM(track: track, previewUrl: finalPreviewUrl)
+                            }
+                        } else {
+                            print("⚠️ No preview URL for '\(track.title)' (checked library and catalog)")
+                        }
+                    }
+                }
+                print("📊 Analysis triggered for \(tracksWithPreviews)/\(tracks.count) tracks")
                 
                 completion(.success(tracks))
             } catch {
@@ -601,6 +667,78 @@ class MusicService: ObservableObject, MusicServiceProtocol {
                 }
                 completion(.failure(error))
             }
+        }
+    }
+    
+    /// Analyze BPM for a track using backend
+    private func analyzeTrackBPM(track: Track, previewUrl: String) async {
+        // Determine host based on environment
+        #if targetEnvironment(simulator)
+        let host = "http://localhost:8000"
+        #else
+        // Use Mac's local IP for physical device testing
+        let host = "http://192.168.1.117:8000"
+        #endif
+        
+        guard let url = URL(string: "\(host)/api/tracks/analyze") else { return }
+        
+        await MainActor.run {
+            self.analyzingTrackCount += 1
+        }
+        
+        print("🔍 Analyzing BPM for track \(track.id)...")
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let body: [String: String] = [
+            "apple_music_id": track.id,
+            "preview_url": previewUrl
+        ]
+        
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+            let (data, _) = try await URLSession.shared.data(for: request)
+            
+            // Simple decoding of response
+            if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let bpm = json["bpm"] as? Double {
+                print("✅ BPM found for \(track.id): \(bpm)")
+                
+                // Create updated track with new BPM (preserving other fields)
+                let updatedTrack = Track(
+                    id: track.id,
+                    title: track.title,
+                    artist: track.artist,
+                    durationSeconds: track.durationSeconds,
+                    bpm: Int(bpm), // Convert to Int as per Track model
+                    artworkURL: track.artworkURL,
+                    isSkipped: track.isSkipped
+                )
+                
+                // Update trackQueue so future matches have the BPM
+                await MainActor.run {
+                    // Update by ID or title+artist match
+                    if let index = self.trackQueue.firstIndex(where: { 
+                        $0.id == updatedTrack.id || 
+                        ($0.title.lowercased() == updatedTrack.title.lowercased() && 
+                         $0.artist.lowercased() == updatedTrack.artist.lowercased()) 
+                    }) {
+                        self.trackQueue[index] = updatedTrack
+                        print("📋 Updated trackQueue with BPM: '\(updatedTrack.title)' = \(bpm)")
+                    }
+                    
+                    // Broadcast update to other subscribers
+                    self.trackUpdatedSubject.send(updatedTrack)
+                }
+            }
+        } catch {
+            print("❌ BPM Analysis failed: \(error.localizedDescription)")
+        }
+        
+        await MainActor.run {
+            self.analyzingTrackCount -= 1
         }
     }
     
@@ -723,17 +861,52 @@ class MusicService: ObservableObject, MusicServiceProtocol {
                 // Reset playback timing for queue ready delay
                 playbackStartTime = Date()
                 
+                // Get artwork from current song
+                let artworkURL = song.artwork?.url(width: 300, height: 300)
+                
                 // Try to find matching track in our queue
-                if let matchingTrack = trackQueue.first(where: { $0.id == songIdString }) {
-                    currentTrack = matchingTrack
+                // First try by ID, then fallback to title + artist match
+                // (Library IDs like "i.ABC" differ from catalog IDs like "1234567890")
+                let matchingTrack = trackQueue.first(where: { $0.id == songIdString })
+                    ?? trackQueue.first(where: { 
+                        $0.title.lowercased() == song.title.lowercased() && 
+                        $0.artist.lowercased() == song.artistName.lowercased() 
+                    })
+                
+                // Debug: Log match status
+                if let matchingTrack = matchingTrack {
+                    print("🎯 Track matched: '\(matchingTrack.title)' - BPM: \(matchingTrack.bpm?.description ?? "nil")")
                 } else {
+                    print("⚠️ No match found for '\(song.title)' by '\(song.artistName)' (ID: \(songIdString))")
+                    print("   Queue has \(trackQueue.count) tracks. Sample titles: \(trackQueue.prefix(3).map { $0.title })")
+                }
+                
+                if let matchingTrack = matchingTrack {
+                    // Use BPM from queue, or preserve existing currentTrack BPM if already set
+                    let finalBPM = matchingTrack.bpm ?? currentTrack?.bpm
+                    
+                    // Create updated track with artwork from the song
+                    currentTrack = Track(
+                        id: matchingTrack.id,
+                        title: matchingTrack.title,
+                        artist: matchingTrack.artist,
+                        durationSeconds: matchingTrack.durationSeconds,
+                        bpm: finalBPM,
+                        artworkURL: artworkURL,
+                        isSkipped: matchingTrack.isSkipped
+                    )
+                } else {
+                    // Preserve existing BPM if this is the same track
+                    let existingBPM = (currentTrack?.title.lowercased() == song.title.lowercased()) ? currentTrack?.bpm : nil
+                    
                     // Create a new track from the song
                     currentTrack = Track(
                         id: songIdString,
                         title: song.title,
                         artist: song.artistName,
                         durationSeconds: Int(song.duration ?? 0),
-                        bpm: nil
+                        bpm: existingBPM,
+                        artworkURL: artworkURL
                     )
                 }
                 
@@ -848,12 +1021,35 @@ private struct LibraryTracksResponse: Codable {
 private struct LibraryTrackItem: Codable {
     let id: String
     let attributes: LibraryTrackAttributes
+    let relationships: LibraryTrackRelationships?
 }
 
 private struct LibraryTrackAttributes: Codable {
     let name: String
     let artistName: String
     let durationInMillis: Int
+    let previews: [PreviewAsset]?
+}
+
+private struct PreviewAsset: Codable {
+    let url: String
+}
+
+private struct LibraryTrackRelationships: Codable {
+    let catalog: CatalogRelationship?
+}
+
+private struct CatalogRelationship: Codable {
+    let data: [CatalogTrackItem]?
+}
+
+private struct CatalogTrackItem: Codable {
+    let id: String
+    let attributes: CatalogTrackAttributes
+}
+
+private struct CatalogTrackAttributes: Codable {
+    let previews: [PreviewAsset]?
 }
 
 // MARK: - Preview Helper

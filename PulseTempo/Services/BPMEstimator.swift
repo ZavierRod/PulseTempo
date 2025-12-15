@@ -7,17 +7,14 @@
 
 import Foundation
 
-/// Temporary utility for estimating track BPM based on metadata
-/// This provides placeholder BPM values until the backend BPM service is implemented
+/// **DEPRECATED**: Use backend BPM analysis instead.
 ///
-/// **NOTE**: This is a TEMPORARY solution. When the backend BPM service (Phase 2.3) is ready,
-/// replace all calls to BPMEstimator.estimate() with actual API calls to fetch verified BPM data.
+/// This was a temporary utility for estimating track BPM based on metadata.
+/// Now replaced by the real BPM analysis backend (librosa-based).
 ///
-/// Usage:
-/// ```swift
-/// let estimatedBPM = BPMEstimator.estimate(title: "Lose Yourself", artist: "Eminem")
-/// // Returns: 171 (estimated based on genre heuristics)
-/// ```
+/// The backend analyzes actual audio from Apple Music preview URLs
+/// and returns accurate BPM values via the /api/tracks/analyze endpoint.
+@available(*, deprecated, message: "Use backend BPM analysis instead - analyzeTrackBPM() in MusicService")
 enum BPMEstimator {
     
     /// Estimate BPM for a track based on title and artist

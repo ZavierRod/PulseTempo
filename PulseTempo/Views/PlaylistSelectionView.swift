@@ -58,6 +58,11 @@ struct PlaylistSelectionView: View {
                         bottomActionBar
                     }
                 }
+                
+                // Analysis Overlay
+                if viewModel.isAnalyzing {
+                    analysisOverlay
+                }
             }
             .navigationTitle("My Playlists")
             .navigationBarTitleDisplayMode(.inline)
@@ -235,6 +240,31 @@ struct PlaylistSelectionView: View {
             .padding(.vertical, 16)
             .background(Color.white.opacity(0.95))
         }
+        }
+
+    
+    // MARK: - Analysis Overlay
+    
+    private var analysisOverlay: some View {
+        VStack {
+            Spacer()
+            
+            HStack(spacing: 12) {
+                ProgressView()
+                    .tint(.white)
+                
+                Text("Analyzing BPM...")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(Color.black.opacity(0.8))
+            .cornerRadius(20)
+            .padding(.bottom, 100) // Above the tab bar/bottom bar
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+        .animation(.spring(), value: viewModel.isAnalyzing)
     }
     
     // MARK: - Helper Methods

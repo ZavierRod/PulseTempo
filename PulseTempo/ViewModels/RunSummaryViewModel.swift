@@ -268,11 +268,11 @@ extension RunSummaryViewModel {
             maxHeartRate: 165,
             minHeartRate: 120,
             tracksPlayed: [
-                Track(id: "1", title: "Eye of the Tiger", artist: "Survivor", durationSeconds: 245, bpm: 109),
-                Track(id: "2", title: "Stronger", artist: "Kanye West", durationSeconds: 312, bpm: 104),
-                Track(id: "3", title: "Lose Yourself", artist: "Eminem", durationSeconds: 326, bpm: 171),
-                Track(id: "4", title: "Can't Stop", artist: "Red Hot Chili Peppers", durationSeconds: 269, bpm: 126),
-                Track(id: "5", title: "Till I Collapse", artist: "Eminem", durationSeconds: 297, bpm: 166)
+                Track(id: "1", title: "Eye of the Tiger", artist: "Survivor", durationSeconds: 245, bpm: 109, artworkURL: nil),
+                Track(id: "2", title: "Stronger", artist: "Kanye West", durationSeconds: 312, bpm: 104, artworkURL: nil),
+                Track(id: "3", title: "Lose Yourself", artist: "Eminem", durationSeconds: 326, bpm: 171, artworkURL: nil),
+                Track(id: "4", title: "Can't Stop", artist: "Red Hot Chili Peppers", durationSeconds: 269, bpm: 126, artworkURL: nil),
+                Track(id: "5", title: "Till I Collapse", artist: "Eminem", durationSeconds: 297, bpm: 166, artworkURL: nil)
             ],
             runMode: .steadyTempo,
             completionDate: Date()

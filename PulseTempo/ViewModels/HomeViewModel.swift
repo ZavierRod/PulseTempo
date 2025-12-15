@@ -43,7 +43,7 @@ final class HomeViewModel: ObservableObject {
     
     // MARK: - Initialization
     
-    init(musicService: MusicServiceProtocol = MusicService(), storageManager: PlaylistStorageManaging = PlaylistStorageManager.shared) {
+    init(musicService: MusicServiceProtocol = MusicService.shared, storageManager: PlaylistStorageManaging = PlaylistStorageManager.shared) {
         self.musicService = musicService
         self.storageManager = storageManager
         loadSelectedPlaylists()
