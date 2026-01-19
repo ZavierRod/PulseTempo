@@ -7,7 +7,7 @@ This document outlines the complete development plan for taking PulseTempo from 
 ## Overview
 
 **Total Timeline:** 13-17 weeks
-**Current Status:** Early prototype with simulated heart rate and fake playlist
+**Current Status:** Phase 4.1 - watchOS Companion App (BLOCKING: Apple Watch heart rate requires watchOS app)
 
 ---
 
@@ -633,38 +633,157 @@ backend/
 
 > **Note**: This phase now includes both Apple Watch and Garmin Venu 3S companion app development.
 > **Status**: Garmin Venu 3S integration (Option B - HealthKit Sync) ✅ **COMPLETED** (Dec 12, 2024)
+> **Status**: Apple Watch integration ⚡ **IN PROGRESS** (Jan 19, 2026) - watchOS app required for real-time HR
 
-### 4.1 Apple watchOS App
+### 🚨 CURRENT BLOCKER: Apple Watch Heart Rate
+
+**Problem Discovered (Jan 19, 2026):**
+When testing Apple Watch mode, heart rate data is not being received. The run completes with `Avg HR: 0, Max HR: 0`.
+
+**Root Cause:**
+The iOS app attempts to get live Apple Watch heart rate by starting an `HKWorkoutSession` on the **iPhone**, but this doesn't work. Live heart rate streaming from Apple Watch requires the workout session to run **on the Apple Watch itself**.
+
+**Current Code Issue (`HeartRateService.swift` line 220-265):**
+```swift
+// This runs on iPhone - CANNOT get live Apple Watch HR!
+let session = try HKWorkoutSession(healthStore: healthKitManager.store, 
+                                   configuration: configuration)
+```
+
+**Solution Required:**
+1. Create a watchOS companion app that runs `HKWorkoutSession` on the watch
+2. Use `WatchConnectivity` framework to stream HR data from watch → iPhone in real-time
+3. Update iOS `HeartRateService` to receive HR via WatchConnectivity instead of local HealthKit
+
+---
+
+### 4.1 Apple watchOS App ⚡ **IN PROGRESS**
+
+#### Architecture Overview
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        APPLE WATCH                               │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │  PulseTempo Watch App                                    │    │
+│  │  ├── WorkoutManager.swift                                │    │
+│  │  │   └── HKWorkoutSession (runs ON watch)               │    │
+│  │  │   └── HKLiveWorkoutBuilder                           │    │
+│  │  │   └── Heart rate query → gets HR every 1-2 sec       │    │
+│  │  │                                                       │    │
+│  │  ├── PhoneConnectivityManager.swift                      │    │
+│  │  │   └── WCSession.sendMessage(["hr": 145])             │    │
+│  │  │                                                       │    │
+│  │  └── ContentView.swift (simple Start/Stop UI)           │    │
+│  └─────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              │ WatchConnectivity (Bluetooth/WiFi)
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                          iPHONE                                  │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │  PulseTempo iOS App                                      │    │
+│  │  ├── WatchConnectivityManager.swift (NEW)               │    │
+│  │  │   └── Receives HR from watch                         │    │
+│  │  │                                                       │    │
+│  │  ├── HeartRateService.swift (MODIFIED)                  │    │
+│  │  │   └── Apple Watch mode → listens to WatchConnectivity│    │
+│  │  │                                                       │    │
+│  │  └── RunSessionViewModel.swift (unchanged)              │    │
+│  └─────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Implementation Checklist
+
+**Step 1: Create watchOS Target (User Action in Xcode)**
+- [ ] File → New → Target → watchOS → App
+- [ ] Product Name: "PulseTempo Watch App"
+- [ ] Add HealthKit capability and entitlement
+- [ ] Add WatchConnectivity capability
+
+**Step 2: watchOS - WorkoutManager.swift**
+- [ ] Create `HKWorkoutSession` on watch
+- [ ] Set up `HKLiveWorkoutBuilder` for data collection
+- [ ] Implement `HKAnchoredObjectQuery` for heart rate updates
+- [ ] Publish heart rate changes to UI and connectivity manager
+
+**Step 3: watchOS - PhoneConnectivityManager.swift**
+- [ ] Initialize `WCSession` with delegate
+- [ ] Implement `sendHeartRate(_ hr: Double)` method
+- [ ] Handle session activation and reachability
+- [ ] Send workout state changes (started/stopped)
+
+**Step 4: watchOS - ContentView.swift**
+- [ ] Large heart rate display (current BPM)
+- [ ] Start/Stop workout button
+- [ ] Workout duration timer
+- [ ] Connection status indicator
+
+**Step 5: iOS - WatchConnectivityManager.swift (NEW)**
+- [ ] Implement `WCSessionDelegate`
+- [ ] Receive heart rate messages from watch
+- [ ] Publish `currentHeartRate` for `HeartRateService` to consume
+- [ ] Handle watch reachability changes
+- [ ] Send workout control commands to watch
+
+**Step 6: iOS - HeartRateService.swift (MODIFY)**
+- [ ] For `.appleWatch` mode: subscribe to `WatchConnectivityManager`
+- [ ] Remove local `HKWorkoutSession` logic for Apple Watch mode
+- [ ] Keep demo mode unchanged
+- [ ] Keep Garmin mode unchanged (uses HealthKit sync)
+
+**Step 7: iOS - PulseTempoApp.swift (MODIFY)**
+- [ ] Initialize `WatchConnectivityManager` at app launch
+- [ ] Activate `WCSession` early
 
 #### Watch App Features
 - Simplified run view with large HR display
-- Current track info
-- Basic playback controls
+- Current track info (received from iPhone)
+- Basic playback controls (forward to iPhone)
 - Run start/stop/pause
 
 **Files to create:**
 ```
 PulseTempoWatch/
-├── PulseTempoWatchApp.swift
-├── Views/
-│   ├── RunView.swift
-│   ├── PreRunView.swift
-│   └── PostRunView.swift
-└── Services/
-    └── WatchConnectivityService.swift
+├── PulseTempoWatchApp.swift          # App entry point
+├── ContentView.swift                  # Main UI (Start/Stop, HR display)
+├── WorkoutManager.swift               # HKWorkoutSession, HR monitoring
+├── PhoneConnectivityManager.swift     # WCSession, send data to iPhone
+├── Info.plist                         # HealthKit usage description
+└── PulseTempoWatch.entitlements       # HealthKit entitlement
 ```
 
-### 4.2 Apple Watch-iPhone Communication
+### 4.2 Apple Watch-iPhone Communication ⚡ **IN PROGRESS**
 
-#### WatchConnectivity
-- Real-time HR streaming to iPhone
-- Sync run state between devices
-- Handle handoff scenarios
-- Optimize battery usage
+#### WatchConnectivity Implementation
+
+**Message Types (Watch → iPhone):**
+```swift
+// Heart rate update (sent every 1-2 seconds during workout)
+["type": "heartRate", "bpm": 145.0, "timestamp": Date()]
+
+// Workout state change
+["type": "workoutState", "state": "started"] // or "stopped", "paused"
+```
+
+**Message Types (iPhone → Watch):**
+```swift
+// Request workout start/stop
+["type": "command", "action": "startWorkout"] // or "stopWorkout"
+
+// Current track info (optional enhancement)
+["type": "nowPlaying", "title": "Song Name", "artist": "Artist"]
+```
+
+#### Communication Strategy
+- Use `sendMessage(_:replyHandler:errorHandler:)` for real-time HR (requires watch reachable)
+- Use `transferUserInfo(_:)` as fallback for non-critical data
+- Handle `sessionReachabilityDidChange` to show connection status
 
 **Files to create:**
 - `PulseTempo/Services/WatchConnectivityManager.swift` (iOS)
-- `PulseTempoWatch/Services/WatchConnectivityManager.swift` (watchOS)
+- `PulseTempoWatch/PhoneConnectivityManager.swift` (watchOS)
 
 ### 4.3 Garmin Venu 3S Integration
 
@@ -968,5 +1087,5 @@ PulseTempoWatch/
 
 ---
 
-**Last Updated:** December 12, 2024  
-**Version:** 1.5 - Temporary BPM fix implemented! Created `BPMEstimator.swift` utility with genre-based heuristics to provide placeholder BPM values until backend (Phase 2.3) is ready. Updated `MusicService` and `RunSessionViewModel` with enhanced error handling and validation. Music playback now functional for manual testing. Phase 1.4 testing: 119 tests (115 passing, 4 skipped).
+**Last Updated:** January 19, 2026  
+**Version:** 1.6 - **watchOS Companion App Required!** Discovered that Apple Watch heart rate cannot be read from iPhone-side `HKWorkoutSession`. The workout must run ON the Apple Watch itself. Added Phase 4.1/4.2 implementation plan with detailed architecture for watchOS app + WatchConnectivity communication. Backend BPM analysis working (Phase 2). Next step: Create watchOS target in Xcode and implement heart rate streaming.

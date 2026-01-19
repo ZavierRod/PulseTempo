@@ -16,3 +16,4 @@ numpy==1.26.3
 scipy==1.11.4
 requests==2.31.0
 pydub==0.25.1
+PyJWT[crypto]>=2.8.0
