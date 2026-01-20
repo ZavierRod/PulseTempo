@@ -7,7 +7,7 @@ This document outlines the complete development plan for taking PulseTempo from 
 ## Overview
 
 **Total Timeline:** 13-17 weeks
-**Current Status:** Phase 4.2 Complete - watchOS App & WatchConnectivity working! HR/Cadence flowing from Watch → iPhone. Backend BPM analysis operational.
+**Current Status:** Phase 4.2 Complete - watchOS App & WatchConnectivity working! HR/Cadence flowing from Watch → iPhone. Backend BPM analysis operational. **Next:** Phase 4.3 Bidirectional Workout Sync.
 
 ---
 
@@ -791,7 +791,159 @@ PulseTempoWatch/
 - `PulseTempo Watch App Watch App/WorkoutManager.swift` (watchOS) ✅
 - `PulseTempo Watch App Watch App/ContentView.swift` (watchOS) ✅
 
-### 4.3 Garmin Venu 3S Integration
+### 4.3 Bidirectional Workout Sync ⏳ **NEXT**
+
+> **Goal:** Premium UX where starting a workout on either device seamlessly syncs to the other, with intelligent handling when the counterpart app isn't open.
+
+#### User Experience Flows
+
+**Flow 1: Watch First → Phone Notification**
+```
+┌──────────────────┐                         ┌──────────────────┐
+│     WATCH        │                         │     iPHONE       │
+├──────────────────┤                         ├──────────────────┤
+│ User taps        │                         │  (App closed)    │
+│ "Start Workout"  │                         │                  │
+│       │          │   sendMessage /         │                  │
+│       ▼          │   applicationContext    │                  │
+│ ┌──────────────┐ │ ───────────────────────▶│ Local Notification│
+│ │  Waiting...  │ │                         │ ┌──────────────┐ │
+│ │ 📱 Open phone│ │                         │ │ PulseTempo   │ │
+│ │  to continue │ │                         │ │ Start workout?│ │
+│ └──────────────┘ │                         │ └──────────────┘ │
+│                  │   workoutStarted        │       │          │
+│  Workout starts  │ ◀─────────────────────  │ User taps "Start"│
+│  HR streaming    │                         │ Music plays      │
+└──────────────────┘                         └──────────────────┘
+```
+
+**Flow 2: Phone First → Watch Notification**
+```
+┌──────────────────┐                         ┌──────────────────┐
+│     iPHONE       │                         │      WATCH       │
+├──────────────────┤                         ├──────────────────┤
+│ User taps        │   Local notification    │  (Clock face)    │
+│ "Start Workout"  │   (mirrors to watch)    │                  │
+│       │          │ ───────────────────────▶│ Notification:    │
+│       ▼          │                         │ ┌──────────────┐ │
+│ ┌──────────────┐ │                         │ │ Start workout?│ │
+│ │  Waiting...  │ │                         │ └──────────────┘ │
+│ │ ⌚ Open watch │ │                         │       │          │
+│ │  to continue │ │   workoutStarted        │       ▼          │
+│ └──────────────┘ │ ◀─────────────────────  │ Watch app opens, │
+│  Music plays,    │                         │ auto-starts      │
+│  syncs with HR   │                         │                  │
+└──────────────────┘                         └──────────────────┘
+```
+
+**Flow 3: Both Apps Open (Happy Path)**
+- `sendMessage` delivers instantly (both reachable)
+- Other device receives command, starts/syncs within ~100ms
+- **Seamless** — feels like one unified app
+
+#### Communication Strategy
+
+**Hybrid Approach (Recommended):**
+1. **Try `sendMessage` first** — instant if counterpart is reachable
+2. **Fall back to `updateApplicationContext`** — persists state for later
+3. **On app launch** — check `receivedApplicationContext` for pending workout state
+
+**Why Hybrid?**
+| Method | Behavior | Use Case |
+|--------|----------|----------|
+| `sendMessage` | Instant, requires both apps reachable | Real-time sync |
+| `applicationContext` | Persists, delivered on next launch | Offline recovery |
+| Local Notification | Prompts user to open other app | UX guidance |
+
+#### Message Types
+
+**New Messages (Watch → iPhone):**
+```swift
+// Request workout start (watch wants phone to start)
+["type": "workoutRequest", "action": "start", "timestamp": Date()]
+
+// Confirm workout started (watch started successfully)
+["type": "workoutStarted", "timestamp": Date()]
+```
+
+**New Messages (iPhone → Watch):**
+```swift
+// Request workout start (phone wants watch to start)
+["type": "workoutRequest", "action": "start", "timestamp": Date()]
+
+// Confirm workout started with music (phone ready)
+["type": "workoutStarted", "musicReady": true, "timestamp": Date()]
+```
+
+#### Implementation Checklist
+
+**Step 1: Add Workout Request Message Handling**
+- [ ] Watch: Add `"workoutRequest"` message type to `PhoneConnectivityManager`
+- [ ] iPhone: Add `"workoutRequest"` message type to `WatchConnectivityManager`
+- [ ] Both: Post notification when request received
+
+**Step 2: Add "Waiting" State UI**
+- [ ] Watch: Add `WorkoutState.waitingForPhone` with "Waiting for phone..." UI
+- [ ] iPhone: Add waiting state with "Waiting for watch..." UI
+- [ ] Both: Show connection status indicator
+
+**Step 3: Implement Local Notifications**
+- [ ] iPhone: Request notification permission in onboarding
+- [ ] iPhone: Post local notification when watch requests workout
+- [ ] iPhone: Add notification action "Start Workout" that opens app
+- [ ] Watch: iOS notifications auto-mirror to watch (no extra code)
+
+**Step 4: Add `applicationContext` Fallback**
+- [ ] Watch: Set `applicationContext` with pending request when phone not reachable
+- [ ] iPhone: Set `applicationContext` with pending request when watch not reachable
+- [ ] Both: Check `receivedApplicationContext` on app launch
+- [ ] Both: Clear context after handling
+
+**Step 5: Add Remote Trigger Flag (Prevent Echo)**
+- [ ] Watch: Add `triggeredRemotely: Bool` to prevent re-sending state
+- [ ] iPhone: Add `triggeredRemotely: Bool` to prevent re-sending command
+- [ ] Both: Reset flag after workout ends
+
+**Step 6: Integration with Workout Flow**
+- [ ] Watch `WorkoutManager`: Listen for `"PhoneCommand"` notification, start workout
+- [ ] iPhone: When `isWatchWorkoutActive` changes to `true`, auto-navigate to workout screen
+- [ ] iPhone: Auto-load playlists and start music when workout syncs
+
+#### Edge Cases
+
+| Scenario | Watch Behavior | iPhone Behavior |
+|----------|----------------|-----------------|
+| Watch starts, phone not reachable | Shows "Waiting..." + sets `applicationContext` | On launch: reads context, prompts to start |
+| Phone starts, watch not reachable | On launch: reads context, auto-starts workout | Shows "Waiting..." + posts notification |
+| Both tap simultaneously | Flag prevents double-start | Flag prevents double-start |
+| Workout already active | Guard: no-op if already running | Guard: no-op if already running |
+| User cancels on "Waiting" screen | Clears pending state, returns to home | Clears pending state, returns to home |
+
+#### Files to Create/Modify
+
+**iOS:**
+- `PulseTempo/Services/WatchConnectivityManager.swift` — Add request handling, applicationContext
+- `PulseTempo/Services/NotificationService.swift` — **NEW** — Local notification management
+- `PulseTempo/Views/WorkoutWaitingView.swift` — **NEW** — "Waiting for watch..." UI
+
+**watchOS:**
+- `PulseTempo Watch App Watch App/PhoneConnectivityManager.swift` — Add request handling
+- `PulseTempo Watch App Watch App/WorkoutManager.swift` — Listen for phone commands
+- `PulseTempo Watch App Watch App/ContentView.swift` — Add "Waiting for phone..." state
+
+#### Success Criteria
+
+- [ ] Starting workout on watch sends notification to phone (if closed)
+- [ ] Starting workout on phone sends notification to watch (if closed)
+- [ ] Both apps open: instant sync (<500ms)
+- [ ] App not open: notification appears within 2 seconds
+- [ ] Opening app from notification navigates directly to workout
+- [ ] No duplicate workout starts (echo prevention works)
+- [ ] Clear "Waiting..." feedback when counterpart not ready
+
+---
+
+### 4.4 Garmin Venu 3S Integration
 
 #### Garmin Connect IQ App (Alternative to watchOS)
 **Implementation Options:**
@@ -987,8 +1139,9 @@ PulseTempoWatch/
 6. ✅ **Set up FastAPI backend** - BPM analysis with PostgreSQL (COMPLETED)
 7. ✅ **Implement BPM lookup** - librosa audio analysis working (COMPLETED)
 8. ✅ **watchOS Companion App** - Real-time HR/cadence from Apple Watch (COMPLETED)
-9. 🔄 **End-to-end testing** - Full workout flow with real watch data (IN PROGRESS)
-10. ⏳ **Phase 5: AI DJ Feature** - Motivational voice prompts (NEXT)
+9. 🔄 **Bidirectional Workout Sync** - Seamless start from either device (IN PROGRESS)
+10. ⏳ **End-to-end testing** - Full workout flow with real watch data (NEXT)
+11. ⏳ **Phase 5: AI DJ Feature** - Motivational voice prompts (FUTURE)
 
 ---
 
@@ -1097,4 +1250,4 @@ PulseTempoWatch/
 ---
 
 **Last Updated:** January 20, 2026  
-**Version:** 1.7 - **watchOS App Complete!** Successfully implemented watchOS companion app with real-time heart rate and cadence streaming via WatchConnectivity. HR data now flows from Apple Watch → iPhone (verified: 49-50 BPM received). Backend BPM analysis operational with Docker (PostgreSQL + FastAPI). Fixed race condition in track analysis endpoint. iOS UI updated to display cadence (SPM) from watch. Next steps: End-to-end testing, UI polish, and Phase 5 (AI DJ).
+**Version:** 1.8 - **Bidirectional Workout Sync planned!** Added Phase 4.3 for seamless workout start from either Watch or iPhone. Features: hybrid messaging (sendMessage + applicationContext fallback), local notifications to prompt user when counterpart app isn't open, "Waiting..." UI states, and echo prevention. Previous: watchOS app complete with HR/cadence streaming via WatchConnectivity.

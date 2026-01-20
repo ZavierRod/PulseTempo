@@ -16,10 +16,13 @@ struct ContentView: View {
     
     var body: some View {
         VStack(spacing: 4) {
-            if workoutManager.isWorkoutActive {
-                activeWorkoutView
-            } else {
+            switch workoutManager.syncState {
+            case .idle:
                 preWorkoutView
+            case .waitingForPhone:
+                waitingForPhoneView
+            case .active, .stopping:
+                activeWorkoutView
             }
         }
     }
@@ -36,9 +39,38 @@ struct ContentView: View {
                 .font(.caption)
             
             Button("Start") {
-                workoutManager.startWorkout()
+                workoutManager.requestWorkoutStart()
             }
             .tint(.green)
+        }
+    }
+    
+    // MARK: - Waiting for Phone View
+    
+    private var waitingForPhoneView: some View {
+        VStack(spacing: 8) {
+            ProgressView()
+                .scaleEffect(1.2)
+            
+            Text("Waiting...")
+                .font(.headline)
+            
+            HStack(spacing: 4) {
+                Image(systemName: "iphone")
+                    .foregroundColor(.blue)
+                Text("Open iPhone")
+                    .font(.caption2)
+            }
+            
+            Text("to start workout")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            
+            Button("Cancel") {
+                workoutManager.cancelWaiting()
+            }
+            .tint(.red)
+            .padding(.top, 4)
         }
     }
     

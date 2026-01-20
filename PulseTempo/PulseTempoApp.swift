@@ -24,6 +24,9 @@ struct PulseTempoApp: App {
         
         // Activate WatchConnectivity to receive heart rate from Apple Watch
         WatchConnectivityManager.shared.activate()
+        
+        // Request notification permission for workout sync
+        NotificationService.shared.requestPermission()
     }
     
     var body: some Scene {

@@ -12,6 +12,14 @@ import Foundation
 import HealthKit
 import Combine
 
+/// Workout state for bidirectional sync
+enum WorkoutSyncState {
+    case idle                  // Ready to start
+    case waitingForPhone       // Watch initiated, waiting for phone to confirm
+    case active                // Workout running
+    case stopping              // Workout ending
+}
+
 /// Manages workout sessions and heart rate monitoring on Apple Watch
 class WorkoutManager: NSObject, ObservableObject {
     
@@ -25,6 +33,9 @@ class WorkoutManager: NSObject, ObservableObject {
     
     /// Whether a workout is currently active
     @Published var isWorkoutActive: Bool = false
+    
+    /// Current sync state for bidirectional workout sync
+    @Published var syncState: WorkoutSyncState = .idle
     
     /// Workout duration in seconds
     @Published var elapsedSeconds: Int = 0
@@ -97,8 +108,31 @@ class WorkoutManager: NSObject, ObservableObject {
     
     // MARK: - Workout Control
     
-    /// Start a workout session
-    func startWorkout() {
+    /// Request workout start - enters waiting state if phone not reachable
+    func requestWorkoutStart() {
+        // Check if phone is reachable (session already activated on app launch)
+        if phoneConnectivityManager?.isPhoneReachable == true {
+            // Phone is reachable - send request and wait for confirmation
+            syncState = .waitingForPhone
+            phoneConnectivityManager?.sendWorkoutRequest()
+            print("⏳ [Watch] Waiting for phone to start workout...")
+        } else {
+            // Phone not reachable - show waiting state with instruction
+            syncState = .waitingForPhone
+            phoneConnectivityManager?.sendWorkoutRequestWithContext()
+            print("⏳ [Watch] Phone not reachable, sent context. Waiting...")
+        }
+    }
+    
+    /// Cancel waiting state and return to idle
+    func cancelWaiting() {
+        syncState = .idle
+        phoneConnectivityManager?.clearPendingWorkoutContext()
+        print("❌ [Watch] Workout request cancelled")
+    }
+    
+    /// Start a workout session (called directly or after phone confirms)
+    func startWorkout(triggeredRemotely: Bool = false) {
         // Request authorization first if needed
         requestAuthorization()
         
@@ -143,16 +177,22 @@ class WorkoutManager: NSObject, ObservableObject {
                 DispatchQueue.main.async {
                     if success {
                         self?.isWorkoutActive = true
+                        self?.syncState = .active
                         self?.startTimer()
-                        self?.phoneConnectivityManager?.sendWorkoutState(isActive: true)
-                        print("✅ [Watch] Workout started successfully")
+                        // Only send state if we initiated (not triggered remotely)
+                        if !triggeredRemotely {
+                            self?.phoneConnectivityManager?.sendWorkoutState(isActive: true)
+                        }
+                        print("✅ [Watch] Workout started successfully (remote: \(triggeredRemotely))")
                     } else {
+                        self?.syncState = .idle
                         self?.errorMessage = "Failed to start workout: \(error?.localizedDescription ?? "Unknown")"
                         print("❌ [Watch] Failed to start workout: \(error?.localizedDescription ?? "Unknown")")
                     }
                 }
             }
         } catch {
+            syncState = .idle
             errorMessage = "Failed to create workout session: \(error.localizedDescription)"
             print("❌ [Watch] Failed to create workout session: \(error.localizedDescription)")
         }
@@ -168,10 +208,13 @@ class WorkoutManager: NSObject, ObservableObject {
         // End the session
         session.end()
         
+        syncState = .stopping
+        
         // End data collection
         workoutBuilder?.endCollection(withEnd: Date()) { [weak self] success, error in
             DispatchQueue.main.async {
                 self?.isWorkoutActive = false
+                self?.syncState = .idle
                 self?.phoneConnectivityManager?.sendWorkoutState(isActive: false)
                 print("✅ [Watch] Workout stopped")
             }

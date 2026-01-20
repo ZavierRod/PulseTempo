@@ -36,6 +36,12 @@ class WatchConnectivityManager: NSObject, ObservableObject {
     /// Connection status message for debugging
     @Published var connectionStatus: String = "Not connected"
     
+    /// Whether there's a pending workout request from watch
+    @Published var hasPendingWorkoutRequest: Bool = false
+    
+    /// Callback when workout should start (triggered by watch request)
+    var onWorkoutRequestReceived: (() -> Void)?
+    
     /// Timestamp of last received heart rate
     @Published var lastHeartRateUpdate: Date?
     
@@ -126,6 +132,9 @@ extension WatchConnectivityManager: WCSessionDelegate {
                 self.connectionStatus = "Connected"
                 self.isWatchReachable = session.isReachable
                 print("✅ [iOS] WatchConnectivity activated, watch reachable: \(session.isReachable)")
+                
+                // Check for pending workout request in applicationContext
+                self.checkPendingWorkoutRequest()
             case .inactive:
                 self.connectionStatus = "Inactive"
                 self.isWatchReachable = false
@@ -183,6 +192,8 @@ extension WatchConnectivityManager: WCSessionDelegate {
             handleHeartRateMessage(message)
         case "workoutState":
             handleWorkoutStateMessage(message)
+        case "workoutRequest":
+            handleWorkoutRequestMessage(message)
         default:
             print("⚠️ [iOS] Unknown message type: \(type)")
         }
@@ -217,5 +228,86 @@ extension WatchConnectivityManager: WCSessionDelegate {
         }
         
         print("🏃 [iOS] Watch workout state: \(isActive ? "STARTED" : "STOPPED")")
+    }
+    
+    // MARK: - Workout Request Handling (Bidirectional Sync)
+    
+    /// Process workout request from watch
+    private func handleWorkoutRequestMessage(_ message: [String: Any]) {
+        guard let action = message["action"] as? String, action == "start" else { return }
+        
+        print("📲 [iOS] Received workout request from watch")
+        
+        DispatchQueue.main.async {
+            self.hasPendingWorkoutRequest = true
+            
+            // Post local notification to alert user
+            NotificationService.shared.postWorkoutRequestNotification()
+            
+            // Call the callback if set
+            self.onWorkoutRequestReceived?()
+        }
+    }
+    
+    /// Check applicationContext for pending workout request (on app launch)
+    func checkPendingWorkoutRequest() {
+        guard let session = session else { return }
+        
+        let context = session.receivedApplicationContext
+        
+        if let pendingRequest = context["pendingWorkoutRequest"] as? Bool, pendingRequest {
+            print("📲 [iOS] Found pending workout request in applicationContext")
+            
+            DispatchQueue.main.async {
+                self.hasPendingWorkoutRequest = true
+                
+                // Post notification
+                NotificationService.shared.postWorkoutRequestNotification()
+                
+                // Call the callback if set
+                self.onWorkoutRequestReceived?()
+            }
+            
+            // Clear the context after handling
+            clearReceivedWorkoutRequest()
+        }
+    }
+    
+    /// Clear the pending workout request
+    func clearPendingWorkoutRequest() {
+        DispatchQueue.main.async {
+            self.hasPendingWorkoutRequest = false
+        }
+        clearReceivedWorkoutRequest()
+        NotificationService.shared.clearWorkoutRequestNotifications()
+        print("🧹 [iOS] Cleared pending workout request")
+    }
+    
+    /// Clear received applicationContext
+    private func clearReceivedWorkoutRequest() {
+        // We can't directly clear receivedApplicationContext, but we can
+        // send a confirmation back to watch which will clear their context
+        // For now, just log it
+        print("🧹 [iOS] Acknowledged workout request from context")
+    }
+    
+    /// Send confirmation to watch that workout has started
+    func sendWorkoutStartedConfirmation() {
+        guard let session = session, session.isReachable else {
+            print("⚠️ [iOS] Watch not reachable, cannot send confirmation")
+            return
+        }
+        
+        let message: [String: Any] = [
+            "type": "command",
+            "action": "startWorkout",
+            "timestamp": Date().timeIntervalSince1970
+        ]
+        
+        session.sendMessage(message, replyHandler: nil) { error in
+            print("❌ [iOS] Failed to send workout confirmation: \(error.localizedDescription)")
+        }
+        
+        print("📤 [iOS] Sent workout started confirmation to watch")
     }
 }

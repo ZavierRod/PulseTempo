@@ -23,6 +23,9 @@ class PhoneConnectivityManager: NSObject, ObservableObject {
     /// Connection status message for UI
     @Published var connectionStatus: String = "Not connected"
     
+    /// Whether the session is activated and ready
+    @Published var isSessionActivated: Bool = false
+    
     // MARK: - Private Properties
     
     private var session: WCSession?
@@ -101,6 +104,77 @@ class PhoneConnectivityManager: NSObject, ObservableObject {
         
         print("📤 [Watch] Sent workout state: \(isActive ? "STARTED" : "STOPPED")")
     }
+    
+    // MARK: - Workout Request (Bidirectional Sync)
+    
+    /// Send workout request to iPhone (instant if reachable)
+    func sendWorkoutRequest() {
+        guard let session = session, session.isReachable else {
+            print("⚠️ [Watch] iPhone not reachable for workout request")
+            return
+        }
+        
+        let message: [String: Any] = [
+            "type": "workoutRequest",
+            "action": "start",
+            "timestamp": Date().timeIntervalSince1970
+        ]
+        
+        session.sendMessage(message, replyHandler: nil) { error in
+            print("❌ [Watch] Failed to send workout request: \(error.localizedDescription)")
+        }
+        
+        print("📤 [Watch] Sent workout request to iPhone")
+    }
+    
+    /// Send workout request via applicationContext (fallback when phone not reachable)
+    func sendWorkoutRequestWithContext() {
+        guard let session = session else {
+            print("❌ [Watch] No session for applicationContext")
+            return
+        }
+        
+        // Only try if session is activated
+        guard session.activationState == .activated else {
+            print("⚠️ [Watch] Session not activated yet, will retry via context when activated")
+            // Store pending request to send when session activates
+            pendingContextRequest = true
+            return
+        }
+        
+        let context: [String: Any] = [
+            "pendingWorkoutRequest": true,
+            "requestTimestamp": Date().timeIntervalSince1970
+        ]
+        
+        do {
+            try session.updateApplicationContext(context)
+            print("📤 [Watch] Sent workout request via applicationContext")
+        } catch {
+            print("❌ [Watch] Failed to update applicationContext: \(error.localizedDescription)")
+        }
+    }
+    
+    /// Flag for pending context request (when session wasn't ready)
+    private var pendingContextRequest: Bool = false
+    
+    /// Clear pending workout request from applicationContext
+    func clearPendingWorkoutContext() {
+        // Clear the pending flag
+        pendingContextRequest = false
+        
+        guard let session = session, session.activationState == .activated else {
+            print("⚠️ [Watch] Session not activated, just cleared pending flag")
+            return
+        }
+        
+        do {
+            try session.updateApplicationContext([:])
+            print("🧹 [Watch] Cleared pending workout context")
+        } catch {
+            print("❌ [Watch] Failed to clear applicationContext: \(error.localizedDescription)")
+        }
+    }
 }
 
 // MARK: - WCSessionDelegate
@@ -113,18 +187,28 @@ extension PhoneConnectivityManager: WCSessionDelegate {
             case .activated:
                 self.connectionStatus = "Connected"
                 self.isPhoneReachable = session.isReachable
+                self.isSessionActivated = true
                 print("✅ [Watch] WatchConnectivity activated, iPhone reachable: \(session.isReachable)")
+                
+                // Send any pending context request now that session is ready
+                if self.pendingContextRequest {
+                    self.pendingContextRequest = false
+                    self.sendWorkoutRequestWithContext()
+                }
             case .inactive:
                 self.connectionStatus = "Inactive"
                 self.isPhoneReachable = false
+                self.isSessionActivated = false
                 print("⚠️ [Watch] WatchConnectivity inactive")
             case .notActivated:
                 self.connectionStatus = "Not activated"
                 self.isPhoneReachable = false
+                self.isSessionActivated = false
                 print("❌ [Watch] WatchConnectivity not activated")
             @unknown default:
                 self.connectionStatus = "Unknown"
                 self.isPhoneReachable = false
+                self.isSessionActivated = false
             }
         }
         
