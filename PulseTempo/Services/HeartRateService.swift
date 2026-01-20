@@ -11,6 +11,7 @@ import Combine     // Reactive programming framework
 
 protocol HeartRateServiceProtocol: AnyObject {
     var currentHeartRatePublisher: AnyPublisher<Int, Never> { get }
+    var currentCadencePublisher: AnyPublisher<Int, Never> { get }
     var errorPublisher: AnyPublisher<Error?, Never> { get }
     func startMonitoring(device: WearableDevice, useDemoMode: Bool, completion: @escaping (Result<Void, Error>) -> Void)
     func stopMonitoring()
@@ -36,13 +37,19 @@ class HeartRateService: ObservableObject, HeartRateServiceProtocol {
     // These automatically notify UI when they change
     
     @Published var currentHeartRate: Int = 0    // Current BPM reading
+    @Published var currentCadence: Int = 0      // Current cadence (SPM) from watch
     @Published var isMonitoring: Bool = false   // Is actively monitoring?
     @Published var error: Error?                // Any error that occurred
     @Published var isDemoMode: Bool = false     // Is using simulated heart rate?
+    @Published var isUsingWatchConnectivity: Bool = false  // Is using Apple Watch via WatchConnectivity?
     @Published var selectedDevice: WearableDevice = .demoMode  // Which device is providing HR data
 
     var currentHeartRatePublisher: AnyPublisher<Int, Never> {
         $currentHeartRate.eraseToAnyPublisher()
+    }
+    
+    var currentCadencePublisher: AnyPublisher<Int, Never> {
+        $currentCadence.eraseToAnyPublisher()
     }
 
     var errorPublisher: AnyPublisher<Error?, Never> {
@@ -56,6 +63,9 @@ class HeartRateService: ObservableObject, HeartRateServiceProtocol {
     
     // Reference to the HealthKit manager singleton
     private let healthKitManager: HealthKitManager
+    
+    // Reference to Watch Connectivity manager for Apple Watch data
+    private let watchConnectivityManager = WatchConnectivityManager.shared
     
     // HEALTHKIT WORKOUT OBJECTS
     // These manage the workout session and data collection
@@ -122,8 +132,22 @@ class HeartRateService: ObservableObject, HeartRateServiceProtocol {
         // Store the selected device
         self.selectedDevice = device
         
-        // If demo mode is requested or HealthKit is unavailable, use simulation
-        if useDemoMode || device == .demoMode || !healthKitManager.isHealthKitAvailable {
+        // If demo mode is requested, use simulation
+        if useDemoMode || device == .demoMode {
+            startDemoMode()
+            completion(.success(()))
+            return
+        }
+        
+        // If Apple Watch is selected, use WatchConnectivity
+        if device == .appleWatch {
+            startWatchConnectivityMode()
+            completion(.success(()))
+            return
+        }
+        
+        // For other devices or if HealthKit is unavailable, fallback to demo
+        if !healthKitManager.isHealthKitAvailable {
             startDemoMode()
             completion(.success(()))
             return
@@ -186,6 +210,9 @@ class HeartRateService: ObservableObject, HeartRateServiceProtocol {
         // Stop demo mode if active
         if isDemoMode {
             stopDemoMode()
+        } else if isUsingWatchConnectivity {
+            // Stop WatchConnectivity mode
+            stopWatchConnectivityMode()
         } else {
             // Stop real HealthKit monitoring
             stopHeartRateQuery()    // Stop the query
@@ -194,6 +221,7 @@ class HeartRateService: ObservableObject, HeartRateServiceProtocol {
         
         isMonitoring = false    // Update state
         currentHeartRate = 0    // Reset heart rate
+        currentCadence = 0      // Reset cadence
     }
     
     // ═══════════════════════════════════════════════════════════
@@ -496,6 +524,60 @@ class HeartRateService: ObservableObject, HeartRateServiceProtocol {
         demoStartTime = nil
         isDemoMode = false
         demoWorkoutPhase = .warmUp
+    }
+    
+    // ═══════════════════════════════════════════════════════════
+    // WATCH CONNECTIVITY MODE - Real Apple Watch Data
+    // ═══════════════════════════════════════════════════════════
+    // MARK: - Watch Connectivity Mode
+    
+    /// Start receiving heart rate and cadence from Apple Watch via WatchConnectivity
+    /// The watch app must be running a workout for data to flow
+    private func startWatchConnectivityMode() {
+        isUsingWatchConnectivity = true
+        isMonitoring = true
+        
+        print("⌚ Starting WatchConnectivity mode - listening for Apple Watch data...")
+        
+        // Subscribe to heart rate updates from watch
+        watchConnectivityManager.$heartRate
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] heartRate in
+                guard let self = self, self.isUsingWatchConnectivity else { return }
+                if heartRate > 0 {
+                    self.currentHeartRate = Int(heartRate)
+                }
+            }
+            .store(in: &cancellables)
+        
+        // Subscribe to cadence updates from watch
+        watchConnectivityManager.$cadence
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] cadence in
+                guard let self = self, self.isUsingWatchConnectivity else { return }
+                self.currentCadence = Int(cadence)
+            }
+            .store(in: &cancellables)
+        
+        // Subscribe to workout state changes
+        watchConnectivityManager.$isWatchWorkoutActive
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] isActive in
+                guard let self = self else { return }
+                if !isActive && self.isUsingWatchConnectivity {
+                    // Watch workout ended - reset values
+                    self.currentHeartRate = 0
+                    self.currentCadence = 0
+                }
+            }
+            .store(in: &cancellables)
+    }
+    
+    /// Stop WatchConnectivity mode and clean up subscriptions
+    private func stopWatchConnectivityMode() {
+        isUsingWatchConnectivity = false
+        // Cancellables will be cleaned up, stopping the subscriptions
+        cancellables.removeAll()
     }
     
     /// Update simulated heart rate based on workout phase

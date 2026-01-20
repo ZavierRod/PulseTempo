@@ -1,6 +1,7 @@
 from typing import Any, List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel
 from app import deps
 from app.models.track import Track
@@ -115,7 +116,7 @@ def analyze_track(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    # Create or update track in DB
+    # Create or update track in DB (handle race condition)
     if not track:
         track = Track(
             id=request.apple_music_id,
@@ -126,12 +127,23 @@ def analyze_track(
             source="librosa_analysis"
         )
         db.add(track)
+        try:
+            db.commit()
+        except IntegrityError:
+            # Race condition: another request already inserted this track
+            db.rollback()
+            track = db.query(Track).filter(
+                Track.id == request.apple_music_id).first()
+            if track:
+                track.bpm = bpm
+                track.confidence = 1.0
+                track.source = "librosa_analysis"
+                db.commit()
     else:
         track.bpm = bpm
         track.confidence = 1.0
         track.source = "librosa_analysis"
-
-    db.commit()
+        db.commit()
 
     return AnalyzeResponse(
         apple_music_id=request.apple_music_id,

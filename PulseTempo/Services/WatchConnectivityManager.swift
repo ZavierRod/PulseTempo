@@ -1,0 +1,221 @@
+//
+//  WatchConnectivityManager.swift
+//  PulseTempo
+//
+//  Created on 1/19/26.
+//
+//  Receives heart rate and cadence data from Apple Watch via WatchConnectivity.
+//  Publishes values for use by HeartRateService and other components.
+//
+
+import Foundation
+import WatchConnectivity
+import Combine
+
+/// Manages communication from Apple Watch to iPhone via WatchConnectivity
+class WatchConnectivityManager: NSObject, ObservableObject {
+    
+    // MARK: - Singleton
+    
+    static let shared = WatchConnectivityManager()
+    
+    // MARK: - Published Properties
+    
+    /// Current heart rate received from watch (BPM)
+    @Published var heartRate: Double = 0
+    
+    /// Current cadence received from watch (SPM)
+    @Published var cadence: Double = 0
+    
+    /// Whether the watch is reachable
+    @Published var isWatchReachable: Bool = false
+    
+    /// Whether a workout is active on the watch
+    @Published var isWatchWorkoutActive: Bool = false
+    
+    /// Connection status message for debugging
+    @Published var connectionStatus: String = "Not connected"
+    
+    /// Timestamp of last received heart rate
+    @Published var lastHeartRateUpdate: Date?
+    
+    // MARK: - Private Properties
+    
+    private var session: WCSession?
+    
+    // MARK: - Initialization
+    
+    private override init() {
+        super.init()
+    }
+    
+    // MARK: - Session Setup
+    
+    /// Activate WatchConnectivity session - call this on app launch
+    func activate() {
+        guard WCSession.isSupported() else {
+            print("❌ [iOS] WatchConnectivity not supported")
+            connectionStatus = "Not supported"
+            return
+        }
+        
+        session = WCSession.default
+        session?.delegate = self
+        session?.activate()
+        print("📱 [iOS] WatchConnectivity session activating...")
+    }
+    
+    // MARK: - Send Commands to Watch
+    
+    /// Send a command to start workout on watch
+    func sendStartWorkoutCommand() {
+        sendCommand("startWorkout")
+    }
+    
+    /// Send a command to stop workout on watch
+    func sendStopWorkoutCommand() {
+        sendCommand("stopWorkout")
+    }
+    
+    /// Send now playing info to watch
+    func sendNowPlaying(title: String, artist: String) {
+        guard let session = session, session.isReachable else {
+            print("⚠️ [iOS] Watch not reachable, cannot send now playing")
+            return
+        }
+        
+        let message: [String: Any] = [
+            "type": "nowPlaying",
+            "title": title,
+            "artist": artist
+        ]
+        
+        session.sendMessage(message, replyHandler: nil) { error in
+            print("❌ [iOS] Failed to send now playing: \(error.localizedDescription)")
+        }
+    }
+    
+    /// Send a command to the watch
+    private func sendCommand(_ action: String) {
+        guard let session = session, session.isReachable else {
+            print("⚠️ [iOS] Watch not reachable, cannot send command: \(action)")
+            return
+        }
+        
+        let message: [String: Any] = [
+            "type": "command",
+            "action": action
+        ]
+        
+        session.sendMessage(message, replyHandler: nil) { error in
+            print("❌ [iOS] Failed to send command: \(error.localizedDescription)")
+        }
+        
+        print("📤 [iOS] Sent command to watch: \(action)")
+    }
+}
+
+// MARK: - WCSessionDelegate
+
+extension WatchConnectivityManager: WCSessionDelegate {
+    
+    func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
+        DispatchQueue.main.async {
+            switch activationState {
+            case .activated:
+                self.connectionStatus = "Connected"
+                self.isWatchReachable = session.isReachable
+                print("✅ [iOS] WatchConnectivity activated, watch reachable: \(session.isReachable)")
+            case .inactive:
+                self.connectionStatus = "Inactive"
+                self.isWatchReachable = false
+                print("⚠️ [iOS] WatchConnectivity inactive")
+            case .notActivated:
+                self.connectionStatus = "Not activated"
+                self.isWatchReachable = false
+                print("❌ [iOS] WatchConnectivity not activated")
+            @unknown default:
+                self.connectionStatus = "Unknown"
+                self.isWatchReachable = false
+            }
+        }
+        
+        if let error = error {
+            print("❌ [iOS] WatchConnectivity activation error: \(error.localizedDescription)")
+        }
+    }
+    
+    func sessionDidBecomeInactive(_ session: WCSession) {
+        DispatchQueue.main.async {
+            self.connectionStatus = "Inactive"
+            self.isWatchReachable = false
+        }
+        print("⚠️ [iOS] WatchConnectivity session became inactive")
+    }
+    
+    func sessionDidDeactivate(_ session: WCSession) {
+        DispatchQueue.main.async {
+            self.connectionStatus = "Deactivated"
+            self.isWatchReachable = false
+        }
+        print("⚠️ [iOS] WatchConnectivity session deactivated")
+        
+        // Reactivate session
+        session.activate()
+    }
+    
+    func sessionReachabilityDidChange(_ session: WCSession) {
+        DispatchQueue.main.async {
+            self.isWatchReachable = session.isReachable
+            self.connectionStatus = session.isReachable ? "Connected" : "Watch not reachable"
+        }
+        print("📱 [iOS] Watch reachability changed: \(session.isReachable)")
+    }
+    
+    /// Handle messages received from Apple Watch
+    func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
+        print("📥 [iOS] Received message from watch: \(message)")
+        
+        guard let type = message["type"] as? String else { return }
+        
+        switch type {
+        case "heartRate":
+            handleHeartRateMessage(message)
+        case "workoutState":
+            handleWorkoutStateMessage(message)
+        default:
+            print("⚠️ [iOS] Unknown message type: \(type)")
+        }
+    }
+    
+    /// Process heart rate and cadence data from watch
+    private func handleHeartRateMessage(_ message: [String: Any]) {
+        guard let bpm = message["bpm"] as? Double else { return }
+        let cadence = message["cadence"] as? Double ?? 0
+        
+        DispatchQueue.main.async {
+            self.heartRate = bpm
+            self.cadence = cadence
+            self.lastHeartRateUpdate = Date()
+        }
+        
+        print("💓 [iOS] Received from watch - HR: \(Int(bpm)) BPM, Cadence: \(Int(cadence)) SPM")
+    }
+    
+    /// Process workout state changes from watch
+    private func handleWorkoutStateMessage(_ message: [String: Any]) {
+        guard let isActive = message["isActive"] as? Bool else { return }
+        
+        DispatchQueue.main.async {
+            self.isWatchWorkoutActive = isActive
+            
+            if !isActive {
+                // Reset values when workout ends
+                self.heartRate = 0
+                self.cadence = 0
+            }
+        }
+        
+        print("🏃 [iOS] Watch workout state: \(isActive ? "STARTED" : "STOPPED")")
+    }
+}

@@ -122,6 +122,18 @@ struct ActiveRunView: View {
                         .font(.headline)                             // Predefined headline style
                         .foregroundColor(.secondary)                 // Secondary color (lighter gray)
                     
+                    // CADENCE DISPLAY (only shown when cadence > 0, i.e., from Apple Watch)
+                    if runSessionVM.currentCadence > 0 {
+                        HStack(spacing: 6) {
+                            Image(systemName: "figure.run")
+                                .foregroundColor(.cyan)
+                            Text("\(runSessionVM.currentCadence) SPM")
+                                .font(.headline)
+                                .foregroundColor(.cyan)
+                        }
+                        .padding(.top, 4)
+                    }
+                    
                     // "TEMPO ZONE" PILL
                     // This creates a rounded pill-shaped badge
                     Text("Tempo Zone")

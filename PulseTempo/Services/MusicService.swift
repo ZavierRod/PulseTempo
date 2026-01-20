@@ -677,7 +677,7 @@ class MusicService: ObservableObject, MusicServiceProtocol {
         let host = "http://localhost:8000"
         #else
         // Use Mac's local IP for physical device testing
-        let host = "http://192.168.1.117:8000"
+        let host = "http://192.168.1.40:8000"
         #endif
         
         guard let url = URL(string: "\(host)/api/tracks/analyze") else { return }

@@ -44,6 +44,7 @@ final class RunSessionViewModel: ObservableObject {
     @Published var isPlaying: Bool = false       // Is music currently playing?
     @Published var currentTrack: Track?          // Currently playing track (? = Optional/None)
     @Published var currentHeartRate: Int = 0     // Current heart rate in BPM
+    @Published var currentCadence: Int = 0       // Current running cadence in SPM (from Apple Watch)
     @Published var currentPlaybackTime: TimeInterval = 0  // Current playback position in seconds
     
     // RUN SESSION STATE
@@ -165,6 +166,13 @@ final class RunSessionViewModel: ObservableObject {
                 self?.onHeartRateChanged(heartRate)
             }
             .store(in: &cancellables)  // Store subscription so it stays alive
+        
+        // OBSERVE CADENCE CHANGES (from Apple Watch)
+        heartRateService.currentCadencePublisher
+            .sink { [weak self] cadence in
+                self?.currentCadence = cadence
+            }
+            .store(in: &cancellables)
         
         // OBSERVE MUSIC PLAYBACK STATE
         musicService.playbackStatePublisher

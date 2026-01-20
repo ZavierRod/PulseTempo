@@ -21,6 +21,9 @@ struct PulseTempoApp: App {
         UINavigationBar.appearance().standardAppearance = appearance
         UINavigationBar.appearance().scrollEdgeAppearance = appearance
         UINavigationBar.appearance().compactAppearance = appearance
+        
+        // Activate WatchConnectivity to receive heart rate from Apple Watch
+        WatchConnectivityManager.shared.activate()
     }
     
     var body: some Scene {
