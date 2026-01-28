@@ -21,6 +21,8 @@ struct ContentView: View {
                 preWorkoutView
             case .waitingForPhone:
                 waitingForPhoneView
+            case .pendingPhoneRequest:
+                pendingPhoneRequestView
             case .active, .stopping:
                 activeWorkoutView
             }
@@ -71,6 +73,41 @@ struct ContentView: View {
             }
             .tint(.red)
             .padding(.top, 4)
+        }
+    }
+    
+    // MARK: - Pending Phone Request View
+    
+    private var pendingPhoneRequestView: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 4) {
+                Image(systemName: "iphone")
+                    .foregroundColor(.blue)
+                Image(systemName: "arrow.right")
+                    .foregroundColor(.secondary)
+                    .font(.caption2)
+                Image(systemName: "applewatch")
+                    .foregroundColor(.green)
+            }
+            .font(.title3)
+            
+            Text("Start Workout?")
+                .font(.headline)
+            
+            Text("iPhone is ready")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            
+            Button("Start") {
+                workoutManager.acceptPhoneRequest()
+            }
+            .tint(.green)
+            .padding(.top, 4)
+            
+            Button("Cancel") {
+                workoutManager.declinePhoneRequest()
+            }
+            .tint(.red)
         }
     }
     

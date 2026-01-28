@@ -100,7 +100,7 @@ final class MusicServiceTests: XCTestCase {
         let tracks = [PulseTempo.Track(id: "t1", title: "Song", artist: "Artist", durationSeconds: 200, bpm: 120)]
         service.tracksToReturn = tracks
 
-        service.fetchTracksFromPlaylist(playlistId: "id") { result in
+        service.fetchTracksFromPlaylist(playlistId: "id", triggerBPMAnalysis: false) { result in
             XCTAssertTrue(result.isSuccess)
             XCTAssertEqual(tracks, self.service.tracksToReturn)
             expectation.fulfill()
@@ -206,7 +206,7 @@ final class TestMusicService: MusicService {
         completion(.success(playlistsToReturn))
     }
 
-    override func fetchTracksFromPlaylist(playlistId: String, completion: @escaping (Result<[PulseTempo.Track], Error>) -> Void) {
+    override func fetchTracksFromPlaylist(playlistId: String, triggerBPMAnalysis: Bool = false, completion: @escaping (Result<[PulseTempo.Track], Error>) -> Void) {
         completion(.success(tracksToReturn))
     }
 }

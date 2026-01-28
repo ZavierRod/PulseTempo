@@ -222,7 +222,9 @@ struct PlaylistSongsView: View {
         isLoading = true
         errorMessage = nil
         
-        musicService.fetchTracksFromPlaylist(playlistId: playlist.id) { result in
+        // Trigger BPM analysis when viewing playlist songs (user is browsing their library)
+        // KNOWN BUG, needs fixing
+        musicService.fetchTracksFromPlaylist(playlistId: playlist.id, triggerBPMAnalysis: true) { result in
             DispatchQueue.main.async {
                 isLoading = false
                 

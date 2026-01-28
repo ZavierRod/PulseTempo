@@ -195,6 +195,12 @@ extension PhoneConnectivityManager: WCSessionDelegate {
                     self.pendingContextRequest = false
                     self.sendWorkoutRequestWithContext()
                 }
+                
+                // Check for pending workout request from phone
+                // Small delay to ensure WorkoutManager's notification observer is ready
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    self.checkPendingPhoneWorkoutRequest()
+                }
             case .inactive:
                 self.connectionStatus = "Inactive"
                 self.isPhoneReachable = false
@@ -236,6 +242,11 @@ extension PhoneConnectivityManager: WCSessionDelegate {
             if let action = message["action"] as? String {
                 handleCommand(action)
             }
+        case "workoutRequest":
+            // iPhone is requesting watch to start workout
+            if let action = message["action"] as? String, action == "start" {
+                handleWorkoutRequestFromPhone()
+            }
         case "nowPlaying":
             // Could display current track info on watch (future enhancement)
             if let title = message["title"] as? String {
@@ -243,6 +254,48 @@ extension PhoneConnectivityManager: WCSessionDelegate {
             }
         default:
             print("⚠️ [Watch] Unknown message type: \(type)")
+        }
+    }
+    
+    /// Handle workout request from iPhone
+    private func handleWorkoutRequestFromPhone() {
+        print("📲 [Watch] Received workout request from iPhone")
+        
+        // Post notification so WorkoutManager can start the workout
+        NotificationCenter.default.post(
+            name: Notification.Name("PhoneWorkoutRequest"),
+            object: nil,
+            userInfo: ["source": "phone"]
+        )
+    }
+    
+    /// Check if there's a pending workout request from phone in applicationContext
+    func hasPendingPhoneWorkoutRequest() -> Bool {
+        guard let session = session, session.activationState == .activated else { return false }
+        
+        let context = session.receivedApplicationContext
+        
+        if let pendingRequest = context["pendingWorkoutRequest"] as? Bool,
+           pendingRequest,
+           let source = context["source"] as? String,
+           source == "phone" {
+            return true
+        }
+        return false
+    }
+    
+    /// Check applicationContext for pending workout request from phone (on app launch)
+    func checkPendingPhoneWorkoutRequest() {
+        guard let session = session, session.activationState == .activated else { return }
+        
+        let context = session.receivedApplicationContext
+        
+        if let pendingRequest = context["pendingWorkoutRequest"] as? Bool,
+           pendingRequest,
+           let source = context["source"] as? String,
+           source == "phone" {
+            print("📲 [Watch] Found pending workout request from phone in applicationContext")
+            handleWorkoutRequestFromPhone()
         }
     }
     

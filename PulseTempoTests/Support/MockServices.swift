@@ -85,10 +85,10 @@ final class MockMusicService: MusicServiceProtocol {
         }
     }
 
-    var fetchTracksHandler: ((String, @escaping (Result<[Track], Error>) -> Void) -> Void)?
-    func fetchTracksFromPlaylist(playlistId: String, completion: @escaping (Result<[Track], Error>) -> Void) {
+    var fetchTracksHandler: ((String, Bool, @escaping (Result<[Track], Error>) -> Void) -> Void)?
+    func fetchTracksFromPlaylist(playlistId: String, triggerBPMAnalysis: Bool, completion: @escaping (Result<[Track], Error>) -> Void) {
         if let fetchTracksHandler {
-            fetchTracksHandler(playlistId, completion)
+            fetchTracksHandler(playlistId, triggerBPMAnalysis, completion)
         } else {
             completion(.success([]))
         }

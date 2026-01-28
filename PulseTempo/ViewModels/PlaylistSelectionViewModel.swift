@@ -167,11 +167,11 @@ final class PlaylistSelectionViewModel: ObservableObject {
         let group = DispatchGroup()
         var fetchError: Error?
         
-        // Fetch tracks from each selected playlist
+        // Fetch tracks from each selected playlist with BPM analysis enabled
         for playlistId in selectedPlaylistIds {
             group.enter()
             
-            musicService.fetchTracksFromPlaylist(playlistId: playlistId) { result in
+            musicService.fetchTracksFromPlaylist(playlistId: playlistId, triggerBPMAnalysis: true) { result in
                 switch result {
                 case .success(let tracks):
                     allTracks.append(contentsOf: tracks)

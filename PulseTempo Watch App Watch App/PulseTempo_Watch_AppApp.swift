@@ -33,7 +33,11 @@ struct PulseTempo_Watch_App_Watch_AppApp: App {
                 // Wire up the managers and activate connectivity immediately
                 workoutManager.phoneConnectivityManager = connectivityManager
                 connectivityManager.activate()
-                print("📱 [Watch] WatchConnectivity activated on app appear")
+                
+                // Request HealthKit permissions immediately for better UX
+                workoutManager.prepare()
+                
+                print("📱 [Watch] App ready - WatchConnectivity and HealthKit activated")
             }
         }
     }

@@ -39,8 +39,14 @@ class WatchConnectivityManager: NSObject, ObservableObject {
     /// Whether there's a pending workout request from watch
     @Published var hasPendingWorkoutRequest: Bool = false
     
+    /// Whether iPhone is waiting for watch to start workout
+    @Published var isWaitingForWatch: Bool = false
+    
     /// Callback when workout should start (triggered by watch request)
     var onWorkoutRequestReceived: (() -> Void)?
+    
+    /// Callback when watch confirms workout started
+    var onWatchWorkoutStarted: (() -> Void)?
     
     /// Timestamp of last received heart rate
     @Published var lastHeartRateUpdate: Date?
@@ -220,6 +226,13 @@ extension WatchConnectivityManager: WCSessionDelegate {
         DispatchQueue.main.async {
             self.isWatchWorkoutActive = isActive
             
+            // If we were waiting for watch and it started, clear waiting state
+            if isActive && self.isWaitingForWatch {
+                self.isWaitingForWatch = false
+                self.onWatchWorkoutStarted?()
+                print("✅ [iOS] Watch confirmed workout started!")
+            }
+            
             if !isActive {
                 // Reset values when workout ends
                 self.heartRate = 0
@@ -309,5 +322,74 @@ extension WatchConnectivityManager: WCSessionDelegate {
         }
         
         print("📤 [iOS] Sent workout started confirmation to watch")
+    }
+    
+    // MARK: - iPhone-Initiated Workout Request (Phone → Watch)
+    
+    /// Request workout start from iPhone - sends to watch and enters waiting state
+    func requestWorkoutFromPhone() {
+        DispatchQueue.main.async {
+            self.isWaitingForWatch = true
+        }
+        
+        // Try direct message first if watch is reachable
+        if let session = session, session.isReachable {
+            let message: [String: Any] = [
+                "type": "workoutRequest",
+                "action": "start",
+                "source": "phone",
+                "timestamp": Date().timeIntervalSince1970
+            ]
+            
+            session.sendMessage(message, replyHandler: nil) { [weak self] error in
+                print("❌ [iOS] Failed to send workout request: \(error.localizedDescription)")
+                // Fall back to applicationContext
+                self?.sendWorkoutRequestViaContext()
+            }
+            
+            print("📤 [iOS] Sent workout request to watch via message")
+        } else {
+            // Watch not reachable - use applicationContext
+            sendWorkoutRequestViaContext()
+            print("⏳ [iOS] Watch not reachable, sent via applicationContext")
+        }
+    }
+    
+    /// Send workout request via applicationContext (fallback)
+    private func sendWorkoutRequestViaContext() {
+        guard let session = session else {
+            print("❌ [iOS] No session for applicationContext")
+            return
+        }
+        
+        let context: [String: Any] = [
+            "pendingWorkoutRequest": true,
+            "source": "phone",
+            "requestTimestamp": Date().timeIntervalSince1970
+        ]
+        
+        do {
+            try session.updateApplicationContext(context)
+            print("📤 [iOS] Sent workout request via applicationContext")
+        } catch {
+            print("❌ [iOS] Failed to update applicationContext: \(error.localizedDescription)")
+        }
+    }
+    
+    /// Cancel waiting for watch
+    func cancelWaitingForWatch() {
+        DispatchQueue.main.async {
+            self.isWaitingForWatch = false
+        }
+        
+        // Clear the applicationContext
+        guard let session = session else { return }
+        
+        do {
+            try session.updateApplicationContext([:])
+            print("🧹 [iOS] Cleared workout request from applicationContext")
+        } catch {
+            print("❌ [iOS] Failed to clear applicationContext: \(error.localizedDescription)")
+        }
     }
 }

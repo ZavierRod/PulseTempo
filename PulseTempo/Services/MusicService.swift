@@ -24,7 +24,7 @@ protocol MusicServiceProtocol: AnyObject {
     func resume()
     func stop()
     func fetchUserPlaylists(completion: @escaping (Result<[MusicPlaylist], Error>) -> Void)
-    func fetchTracksFromPlaylist(playlistId: String, completion: @escaping (Result<[Track], Error>) -> Void)
+    func fetchTracksFromPlaylist(playlistId: String, triggerBPMAnalysis: Bool, completion: @escaping (Result<[Track], Error>) -> Void)
 }
 
 /// Service for controlling Apple Music playback and managing the music queue
@@ -123,6 +123,10 @@ class MusicService: ObservableObject, MusicServiceProtocol {
     
     /// Track the last song ID we logged to prevent duplicate "NOW PLAYING" logs
     private var lastLoggedSongId: String?
+    
+    /// Cache of analyzed BPM values by track ID (persists across fetches)
+    /// Key: track ID (e.g., "i.ABC123"), Value: analyzed BPM
+    private var bpmCache: [String: Int] = [:]
     
     /// Set to track Combine subscriptions
     private var cancellables = Set<AnyCancellable>()
@@ -598,9 +602,11 @@ class MusicService: ObservableObject, MusicServiceProtocol {
     ///
     /// - Parameters:
     ///   - playlistId: The ID of the playlist
+    ///   - triggerBPMAnalysis: Whether to trigger BPM analysis for tracks without cached BPM.
+    ///                         Set to `true` when selecting playlists, `false` when starting workouts.
     ///   - completion: Called with array of tracks or error
     @MainActor
-    func fetchTracksFromPlaylist(playlistId: String, completion: @escaping (Result<[Track], Error>) -> Void) {
+    func fetchTracksFromPlaylist(playlistId: String, triggerBPMAnalysis: Bool = false, completion: @escaping (Result<[Track], Error>) -> Void) {
         guard musicKitManager.isAuthorized else {
             let error = MusicKitError.authorizationDenied
             self.error = error
@@ -621,44 +627,63 @@ class MusicService: ObservableObject, MusicServiceProtocol {
                 let tracksResponse = try decoder.decode(LibraryTracksResponse.self, from: response.data)
                 
                 // Convert to our Track model
-                // BPM starts as nil - will be populated by backend analysis
+                // Use cached BPM if available, otherwise nil (will be populated by backend analysis)
                 let tracks = tracksResponse.data.map { track in
-                    Track(
+                    // Try to find cached BPM by ID first, then by title+artist
+                    var cachedBPM = self.bpmCache[track.id]
+                    if cachedBPM == nil {
+                        let titleArtistKey = "\(track.attributes.name.lowercased())|\(track.attributes.artistName.lowercased())"
+                        cachedBPM = self.bpmCache[titleArtistKey]
+                    }
+                    if cachedBPM != nil {
+                        print("📦 Using cached BPM for '\(track.attributes.name)': \(cachedBPM!)")
+                    }
+                    return Track(
                         id: track.id,
                         title: track.attributes.name,
                         artist: track.attributes.artistName,
                         durationSeconds: Int(track.attributes.durationInMillis / 1000),
-                        bpm: nil,  // Backend BPM analysis will update this
+                        bpm: cachedBPM,  // Use cached BPM if available
                         artworkURL: nil  // Artwork loaded when track plays
                     )
                 }
                 
-                // Trigger background BPM analysis
-                print("🔍 Checking \(tracks.count) tracks for preview URLs...")
-                var tracksWithPreviews = 0
+                // Only trigger BPM analysis if requested (e.g., during playlist selection)
+                // This avoids redundant network calls when starting workouts
+                // Overall, I want BPM analysis to happen when a user confirms their playlist choice
+                let tracksWithCachedBPM = tracks.filter { $0.bpm != nil }.count
+                print("📊 Tracks status: \(tracksWithCachedBPM)/\(tracks.count) have cached BPM")
                 
-                for track in tracks {
-                    if let trackItem = tracksResponse.data.first(where: { $0.id == track.id }) {
-                        // Try to get preview from library item first, then fallback to catalog item
-                        var previewUrl = trackItem.attributes.previews?.first?.url
-                        
-                        if previewUrl == nil {
-                            // Check catalog relationship
-                            previewUrl = trackItem.relationships?.catalog?.data?.first?.attributes.previews?.first?.url
-                        }
-                        
-                        if let finalPreviewUrl = previewUrl {
-                            tracksWithPreviews += 1
-                            print("✨ Found preview for '\(track.title)': \(finalPreviewUrl)")
-                            Task {
-                                await self.analyzeTrackBPM(track: track, previewUrl: finalPreviewUrl)
+                if triggerBPMAnalysis {
+                    let tracksNeedingAnalysis = tracks.filter { $0.bpm == nil }
+                    print("🔍 Triggering BPM analysis for \(tracksNeedingAnalysis.count) tracks...")
+                    var tracksWithPreviews = 0
+                    
+                    for track in tracksNeedingAnalysis {
+                        if let trackItem = tracksResponse.data.first(where: { $0.id == track.id }) {
+                            // Try to get preview from library item first, then fallback to catalog item
+                            var previewUrl = trackItem.attributes.previews?.first?.url
+                            
+                            if previewUrl == nil {
+                                // Check catalog relationship
+                                previewUrl = trackItem.relationships?.catalog?.data?.first?.attributes.previews?.first?.url
                             }
-                        } else {
-                            print("⚠️ No preview URL for '\(track.title)' (checked library and catalog)")
+                            
+                            if let finalPreviewUrl = previewUrl {
+                                tracksWithPreviews += 1
+                                print("✨ Found preview for '\(track.title)': \(finalPreviewUrl)")
+                                Task {
+                                    await self.analyzeTrackBPM(track: track, previewUrl: finalPreviewUrl)
+                                }
+                            } else {
+                                print("⚠️ No preview URL for '\(track.title)' (checked library and catalog)")
+                            }
                         }
                     }
+                    print("📊 Analysis triggered for \(tracksWithPreviews)/\(tracksNeedingAnalysis.count) tracks")
+                } else {
+                    print("ℹ️ BPM analysis skipped (using cached values only)")
                 }
-                print("📊 Analysis triggered for \(tracksWithPreviews)/\(tracks.count) tracks")
                 
                 completion(.success(tracks))
             } catch {
@@ -704,6 +729,7 @@ class MusicService: ObservableObject, MusicServiceProtocol {
             // Simple decoding of response
             if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                let bpm = json["bpm"] as? Double {
+                let bpmInt = Int(bpm)
                 print("✅ BPM found for \(track.id): \(bpm)")
                 
                 // Create updated track with new BPM (preserving other fields)
@@ -712,13 +738,20 @@ class MusicService: ObservableObject, MusicServiceProtocol {
                     title: track.title,
                     artist: track.artist,
                     durationSeconds: track.durationSeconds,
-                    bpm: Int(bpm), // Convert to Int as per Track model
+                    bpm: bpmInt,
                     artworkURL: track.artworkURL,
                     isSkipped: track.isSkipped
                 )
                 
-                // Update trackQueue so future matches have the BPM
+                // Update BPM cache and trackQueue
                 await MainActor.run {
+                    // Cache BPM by track ID for future fetches
+                    self.bpmCache[track.id] = bpmInt
+                    
+                    // Also cache by title+artist key for cross-ID matching
+                    let titleArtistKey = "\(track.title.lowercased())|\(track.artist.lowercased())"
+                    self.bpmCache[titleArtistKey] = bpmInt
+                    
                     // Update by ID or title+artist match
                     if let index = self.trackQueue.firstIndex(where: { 
                         $0.id == updatedTrack.id || 
@@ -726,7 +759,7 @@ class MusicService: ObservableObject, MusicServiceProtocol {
                          $0.artist.lowercased() == updatedTrack.artist.lowercased()) 
                     }) {
                         self.trackQueue[index] = updatedTrack
-                        print("📋 Updated trackQueue with BPM: '\(updatedTrack.title)' = \(bpm)")
+                        print("📋 Updated trackQueue with BPM: '\(updatedTrack.title)' = \(bpmInt)")
                     }
                     
                     // Broadcast update to other subscribers

@@ -14,6 +14,7 @@ struct HomeView: View {
     // MARK: - Properties
     
     @StateObject private var viewModel = HomeViewModel()
+    @ObservedObject private var connectivityManager = WatchConnectivityManager.shared
     
     /// Navigation state
     @State private var showingActiveRun = false
@@ -95,6 +96,58 @@ struct HomeView: View {
             .onAppear {
                 viewModel.refreshPlaylists()
             }
+            .overlay {
+                // Waiting for Watch overlay
+                if connectivityManager.isWaitingForWatch {
+                    waitingForWatchOverlay
+                }
+            }
+        }
+    }
+    
+    // MARK: - Waiting for Watch Overlay
+    
+    private var waitingForWatchOverlay: some View {
+        ZStack {
+            // Dimmed background
+            Color.black.opacity(0.5)
+                .ignoresSafeArea()
+            
+            VStack(spacing: 20) {
+                ProgressView()
+                    .scaleEffect(1.5)
+                    .tint(.white)
+                
+                Text("Waiting for Watch...")
+                    .font(.title2.bold())
+                    .foregroundColor(.white)
+                
+                HStack(spacing: 8) {
+                    Image(systemName: "applewatch")
+                        .foregroundColor(.green)
+                    Text("Open Apple Watch to start")
+                        .font(.subheadline)
+                }
+                .foregroundColor(.white.opacity(0.8))
+                
+                Button(action: {
+                    connectivityManager.cancelWaitingForWatch()
+                }) {
+                    Text("Cancel")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 32)
+                        .padding(.vertical, 12)
+                        .background(Color.red.opacity(0.8))
+                        .cornerRadius(10)
+                }
+                .padding(.top, 8)
+            }
+            .padding(32)
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(Color.black.opacity(0.7))
+            )
         }
     }
     
@@ -328,7 +381,31 @@ struct HomeView: View {
             switch result {
             case .success(let tracks):
                 workoutTracks = tracks
-                showingActiveRun = true
+                
+                // Check if watch already requested workout (watch-first flow)
+                if connectivityManager.hasPendingWorkoutRequest {
+                    print("✅ [iOS] Watch already requested - confirming and starting immediately")
+                    connectivityManager.clearPendingWorkoutRequest()
+                    connectivityManager.sendWorkoutStartedConfirmation()
+                    showingActiveRun = true
+                    return
+                }
+                
+                // Phone-first flow: Send workout request to watch and wait for confirmation
+                connectivityManager.requestWorkoutFromPhone()
+                
+                // Set up callback for when watch confirms - only then navigate to ActiveRunView
+                connectivityManager.onWatchWorkoutStarted = {
+                    connectivityManager.isWaitingForWatch = false
+                    showingActiveRun = true
+                }
+                
+                // If watch workout is already active, start immediately (no need to wait)
+                if connectivityManager.isWatchWorkoutActive {
+                    connectivityManager.isWaitingForWatch = false
+                    showingActiveRun = true
+                }
+                // Otherwise, isWaitingForWatch will show the overlay until watch confirms
                 
             case .failure(let error):
                 trackLoadError = error.localizedDescription

@@ -16,6 +16,7 @@ import Combine
 enum WorkoutSyncState {
     case idle                  // Ready to start
     case waitingForPhone       // Watch initiated, waiting for phone to confirm
+    case pendingPhoneRequest   // Phone requested workout, waiting for user to confirm on watch
     case active                // Workout running
     case stopping              // Workout ending
 }
@@ -65,12 +66,67 @@ class WorkoutManager: NSObject, ObservableObject {
     /// Will be set in Step 3
     var phoneConnectivityManager: PhoneConnectivityManager?
     
+    // MARK: - Notification Observers
+    
+    private var phoneWorkoutRequestObserver: NSObjectProtocol?
+    private var phoneCommandObserver: NSObjectProtocol?
+    
     // MARK: - Initialization
     
     override init() {
         super.init()
         // Don't request authorization here - it blocks the UI
         // Authorization will be requested when starting workout
+        
+        // Listen for workout requests from iPhone
+        setupNotificationObservers()
+    }
+    
+    deinit {
+        if let observer = phoneWorkoutRequestObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        if let observer = phoneCommandObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+    
+    /// Setup notification observers for phone commands
+    private func setupNotificationObservers() {
+        // Listen for phone-initiated workout requests (phone-first flow)
+        // NOTE: We do NOT auto-start - we show a pending state and wait for user confirmation
+        phoneWorkoutRequestObserver = NotificationCenter.default.addObserver(
+            forName: Notification.Name("PhoneWorkoutRequest"),
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self = self else { return }
+            
+            // Only accept if idle - set to pending state
+            guard self.syncState == .idle else {
+                print("⚠️ [Watch] Ignoring phone request - already in state: \(self.syncState)")
+                return
+            }
+            
+            // Set pending state - user must tap Start on watch to confirm
+            print("📲 [Watch] Phone requested workout - waiting for user confirmation")
+            self.syncState = .pendingPhoneRequest
+        }
+        
+        // Listen for phone commands (watch-first flow: phone confirms our request)
+        phoneCommandObserver = NotificationCenter.default.addObserver(
+            forName: Notification.Name("PhoneCommand"),
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self = self else { return }
+            guard let action = notification.userInfo?["action"] as? String else { return }
+            
+            if action == "startWorkout" && self.syncState == .waitingForPhone {
+                print("✅ [Watch] Phone confirmed - starting workout!")
+                self.startWorkout(triggeredRemotely: true)
+            }
+        }
     }
     
     /// Call this when the view appears to prepare HealthKit
@@ -110,7 +166,14 @@ class WorkoutManager: NSObject, ObservableObject {
     
     /// Request workout start - enters waiting state if phone not reachable
     func requestWorkoutStart() {
-        // Check if phone is reachable (session already activated on app launch)
+        // Check if phone already requested workout (phone-first flow)
+        if phoneConnectivityManager?.hasPendingPhoneWorkoutRequest() == true {
+            print("✅ [Watch] Phone already requested - starting immediately")
+            startWorkout(triggeredRemotely: true)
+            return
+        }
+        
+        // Watch-first flow: Check if phone is reachable
         if phoneConnectivityManager?.isPhoneReachable == true {
             // Phone is reachable - send request and wait for confirmation
             syncState = .waitingForPhone
@@ -129,6 +192,27 @@ class WorkoutManager: NSObject, ObservableObject {
         syncState = .idle
         phoneConnectivityManager?.clearPendingWorkoutContext()
         print("❌ [Watch] Workout request cancelled")
+    }
+    
+    /// Accept pending phone request and start workout
+    /// Called when user taps Start after phone requested workout
+    func acceptPhoneRequest() {
+        guard syncState == .pendingPhoneRequest else {
+            print("⚠️ [Watch] Cannot accept - not in pendingPhoneRequest state")
+            return
+        }
+        
+        print("✅ [Watch] User accepted phone request - starting workout")
+        startWorkout(triggeredRemotely: true)
+    }
+    
+    /// Decline pending phone request
+    func declinePhoneRequest() {
+        guard syncState == .pendingPhoneRequest else { return }
+        
+        syncState = .idle
+        phoneConnectivityManager?.clearPendingWorkoutContext()
+        print("❌ [Watch] User declined phone workout request")
     }
     
     /// Start a workout session (called directly or after phone confirms)
@@ -179,10 +263,9 @@ class WorkoutManager: NSObject, ObservableObject {
                         self?.isWorkoutActive = true
                         self?.syncState = .active
                         self?.startTimer()
-                        // Only send state if we initiated (not triggered remotely)
-                        if !triggeredRemotely {
-                            self?.phoneConnectivityManager?.sendWorkoutState(isActive: true)
-                        }
+                        // ALWAYS send workout state to phone - this is crucial for sync
+                        // Phone needs to know workout started (especially if phone initiated)
+                        self?.phoneConnectivityManager?.sendWorkoutState(isActive: true)
                         print("✅ [Watch] Workout started successfully (remote: \(triggeredRemotely))")
                     } else {
                         self?.syncState = .idle

@@ -283,6 +283,11 @@ struct PlaylistSelectionView: View {
                 viewModel.errorMessage = error.localizedDescription
             }
         }
+        // This is where I want BPM analysis to happen, not when a user views the playlist after the fact
+        // This is a known bug that will be fixed, here is a rough implementation that I thought up
+        // for id in playlistIds {
+        //     musicService.fetchTracksFromPlaylist(playlistId: id, triggerBPMAnalysis: true)
+        // }
     }
 }
 

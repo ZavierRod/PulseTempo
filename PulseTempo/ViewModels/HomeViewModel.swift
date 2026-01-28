@@ -128,11 +128,12 @@ final class HomeViewModel: ObservableObject {
         let group = DispatchGroup()
         var fetchError: Error?
         
-        // Fetch tracks from each selected playlist
+        // Fetch tracks from each selected playlist WITHOUT triggering BPM analysis
+        // BPM analysis should only happen during playlist selection, not workout start
         for playlistId in savedPlaylistIds {
             group.enter()
             
-            musicService.fetchTracksFromPlaylist(playlistId: playlistId) { result in
+            musicService.fetchTracksFromPlaylist(playlistId: playlistId, triggerBPMAnalysis: false) { result in
                 switch result {
                 case .success(let tracks):
                     allTracks.append(contentsOf: tracks)
