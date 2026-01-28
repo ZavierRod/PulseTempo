@@ -30,6 +30,11 @@ struct ActiveRunView: View {
     // When any @Published property changes, SwiftUI automatically re-renders
     @StateObject private var runSessionVM: RunSessionViewModel
     
+    // HEART BEAT ANIMATION STATE
+    // These control the heart icon pulsing at your actual heart rate
+    @State private var heartBeat = false           // Toggles to trigger animation
+    @State private var beatTimer: Timer? = nil     // Timer that fires at heart rate interval
+    
     // INITIALIZER
     // Create the ViewModel with tracks when the view is created
     init(tracks: [Track]) {
@@ -55,6 +60,49 @@ struct ActiveRunView: View {
         let minutes = totalSeconds / 60
         let secs = totalSeconds % 60
         return "\(minutes):\(String(format: "%02d", secs))"
+    }
+    
+    // ═══════════════════════════════════════════════════════════
+    // HEART BEAT TIMER FUNCTIONS
+    // ═══════════════════════════════════════════════════════════
+    
+    /// Start a timer that pulses the heart icon at the given heart rate (BPM)
+    /// - Parameter heartRate: The current heart rate in beats per minute
+    ///
+    /// How it works:
+    /// 1. Calculate interval: 60 seconds / BPM = seconds between beats
+    ///    Example: 120 BPM → 60/120 = 0.5 seconds per beat
+    /// 2. Create a repeating Timer that fires at this interval
+    /// 3. Each time the timer fires, toggle heartBeat to trigger animation
+    private func startHeartBeatTimer(for heartRate: Int) {
+        // Stop any existing timer first (prevent multiple timers)
+        stopHeartBeatTimer()
+        
+        // Guard against invalid heart rates (avoid division by zero)
+        guard heartRate > 0 else {
+            return
+        }
+        
+        // Calculate the interval between beats
+        // 60 BPM = 1 beat per second (interval = 1.0)
+        // 120 BPM = 2 beats per second (interval = 0.5)
+        // 180 BPM = 3 beats per second (interval = 0.33)
+        let interval = 60.0 / Double(heartRate)
+        
+        // Create a repeating timer on the main thread (required for UI updates)
+        // Timer.scheduledTimer creates and starts a timer automatically
+        beatTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
+            // Toggle heartBeat to trigger the scale animation
+            // true → false → true → false ... creates the pulsing effect
+            heartBeat.toggle()
+        }
+    }
+    
+    /// Stop and clean up the heart beat timer
+    /// Called when view disappears or when heart rate changes (before creating new timer)
+    private func stopHeartBeatTimer() {
+        beatTimer?.invalidate()  // Stop the timer from firing
+        beatTimer = nil          // Release the timer object
     }
     
     // BODY PROPERTY (Required by View protocol)
@@ -109,18 +157,35 @@ struct ActiveRunView: View {
                         // They chain together (like method chaining in Python/pandas)
                         .font(.system(size: 40))                    // Set icon size
                         .foregroundColor(.red)                       // Make it red
-                        .symbolEffect(.pulse, value: runSessionVM.currentHeartRate)  // Animate when HR changes
+                        // HEART RATE-SYNCED ANIMATION
+                        // Scale up when heartBeat is true, normal size when false
+                        // This creates a "lub-dub" pulsing effect at your actual heart rate
+                        .scaleEffect(heartBeat ? 1.3 : 1.0)
+                        .opacity(heartBeat ? 1.0 : 0.7)              // Brighter on beat, dimmer between
+                        .animation(.easeInOut(duration: 0.15), value: heartBeat)
                     
                     // BPM NUMBER DISPLAY
                     // \(bpm) is string interpolation (like f"{bpm}" in Python)
+                    if runSessionVM.currentHeartRate > 0 {
                     Text("\(runSessionVM.currentHeartRate)")
                         .font(.system(size: 72, weight: .bold, design: .rounded))  // Large, bold, rounded font
                         .foregroundColor(.primary)                   // Primary color (adapts to light/dark mode)
-                    
+                                            
                     // "BPM" LABEL
                     Text("BPM")
                         .font(.headline)                             // Predefined headline style
                         .foregroundColor(.secondary)                 // Secondary color (lighter gray)
+                    } else {
+                    Text("Fetching Heart Rate Data...")
+                        .font(.system(size: 18, weight: .bold, design: .rounded))  // Large, bold, rounded font
+                        .foregroundColor(.primary)                   // Primary color (adapts to light/dark mode)
+                           .phaseAnimator([false, true]) { content, phase in
+                                content.opacity(phase ? 1 : 0.4)
+                            } animation: { _ in
+                                .easeInOut(duration: 0.8)
+                            }
+                    }
+
                     
                     // CADENCE DISPLAY (only shown when cadence > 0, i.e., from Apple Watch)
                     if runSessionVM.currentCadence > 0 {
@@ -132,6 +197,15 @@ struct ActiveRunView: View {
                                 .foregroundColor(.cyan)
                         }
                         .padding(.top, 4)
+                    } else {
+                        Text("Fetching Cadence Data...")
+                        .font(.system(size: 18, weight: .bold, design: .rounded))  // Large, bold, rounded font
+                        .foregroundColor(.primary)                   // Primary color (adapts to light/dark mode)
+                           .phaseAnimator([false, true]) { content, phase in
+                                content.opacity(phase ? 1 : 0.4)
+                            } animation: { _ in
+                                .easeInOut(duration: 0.8)
+                            }
                     }
                     
                     // "TEMPO ZONE" PILL
@@ -144,7 +218,7 @@ struct ActiveRunView: View {
                         .background(Capsule().fill(Color.blue.opacity(0.2)))  // Rounded background
                         .foregroundColor(.blue)                      // Blue text
                 }
-                .padding(.top, 40)  // Add 40 points of space above this section
+                .padding(.top, 80)  // Add space above to clear Dynamic Island and nav buttons
                 
                 // ═══════════════════════════════════════════════════════════
                 // SONG CARD SECTION
@@ -339,10 +413,11 @@ struct ActiveRunView: View {
             }
             
             // ═══════════════════════════════════════════════════════════
-            // BACK BUTTON OVERLAY (layered inside ZStack)
+            // NAV BUTTONS OVERLAY (layered inside ZStack)
             // ═══════════════════════════════════════════════════════════
             VStack {
                 HStack {
+                    // HOME BUTTON (left side)
                     Button(action: {
                         dismiss()  // Navigate back to HomeView
                     }) {
@@ -363,9 +438,29 @@ struct ActiveRunView: View {
                     }
                     
                     Spacer()
+                    
+                    // FINISH WORKOUT BUTTON (right side)
+                    Button(action: {
+                        // TODO: Add finish workout functionality
+                    }) {
+                        HStack(spacing: 4) {
+                            Text("Finish")
+                                .font(.system(size: 17))
+                            Image(systemName: "flag.checkered")
+                                .font(.system(size: 16, weight: .semibold))
+                        }
+                        .foregroundColor(.red)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(
+                            Capsule()
+                                .fill(Color.white.opacity(0.9))
+                                .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                        )
+                    }
                 }
-                .padding(.leading, 20)
-                .padding(.top, 50)  // Account for safe area
+                .padding(.horizontal, 20)
+                .padding(.top, 60)  // Account for safe area
                 
                 Spacer()
             }
@@ -381,6 +476,8 @@ struct ActiveRunView: View {
         .onAppear {
             // Auto-start the run session
             runSessionVM.startRun()
+            // Start heart beat timer if we already have a heart rate
+            startHeartBeatTimer(for: runSessionVM.currentHeartRate)
         }
         // .onDisappear - called when view leaves screen
         // Like React's cleanup function or componentWillUnmount
@@ -389,6 +486,16 @@ struct ActiveRunView: View {
         // Like __exit__ in a context manager or a cleanup/teardown method
         .onDisappear {
             runSessionVM.stopRun()  // Clean up when leaving
+            stopHeartBeatTimer()    // Clean up timer
+        }
+        // ═══════════════════════════════════════════════════════════
+        // HEART RATE CHANGE OBSERVER
+        // ═══════════════════════════════════════════════════════════
+        // .onChange watches a value and runs code when it changes
+        // Like Python's property setter or a React useEffect with dependencies
+        .onChange(of: runSessionVM.currentHeartRate) { oldValue, newValue in
+            // Restart the timer with the new heart rate interval
+            startHeartBeatTimer(for: newValue)
         }
     }
     
