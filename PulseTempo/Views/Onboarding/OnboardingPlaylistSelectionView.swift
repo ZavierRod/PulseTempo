@@ -62,6 +62,11 @@ struct OnboardingPlaylistSelectionView: View {
                 // Bottom action bar
                 bottomActionBar
             }
+            
+            // Analysis Overlay (blocks interaction while analyzing BPM)
+            if viewModel.isAnalyzing {
+                analysisOverlay
+            }
         }
         .onAppear {
             viewModel.fetchPlaylists()
@@ -289,6 +294,56 @@ struct OnboardingPlaylistSelectionView: View {
                     .padding(.vertical, 20)
             }
         }
+    }
+    
+    // MARK: - Analysis Overlay
+    
+    /// Full-screen overlay that blocks all interaction while BPM analysis is in progress
+    private var analysisOverlay: some View {
+        ZStack {
+            // Dimmed background that blocks interaction
+            Color.black.opacity(0.7)
+                .ignoresSafeArea()
+            
+            // Centered analysis card
+            VStack(spacing: 20) {
+                // Animated music waveform icon
+                Image(systemName: "waveform.circle.fill")
+                    .font(.system(size: 60))
+                    .foregroundColor(.pink)
+                    .symbolEffect(.pulse, options: .repeating)
+                
+                Text("Analyzing BPM")
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                
+                Text("Please wait while we analyze the tempo of your songs...")
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.8))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 20)
+                
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    .scaleEffect(1.2)
+                    .padding(.top, 8)
+            }
+            .padding(32)
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color(white: 0.15), Color(white: 0.1)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .shadow(color: .black.opacity(0.5), radius: 20, x: 0, y: 10)
+            )
+            .padding(.horizontal, 40)
+        }
+        .transition(.opacity)
+        .animation(.easeInOut(duration: 0.3), value: viewModel.isAnalyzing)
     }
     
     // MARK: - Helper Methods

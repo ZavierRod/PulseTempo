@@ -27,6 +27,11 @@ struct PulseTempoApp: App {
         
         // Request notification permission for workout sync
         NotificationService.shared.requestPermission()
+        
+        // IMPORTANT: Warm up local network permission early
+        // This triggers the iOS permission dialog before BPM analysis is actually needed,
+        // ensuring the user has already granted permission by the time playlists are selected.
+        MusicService.shared.warmUpLocalNetworkPermission()
     }
     
     var body: some Scene {

@@ -45,6 +45,9 @@ final class PlaylistSelectionViewModel: ObservableObject {
     /// Whether BPM analysis is currently in progress
     @Published var isAnalyzing: Bool = false
     
+    /// Tracks fetched from selected playlists (stored until analysis completes)
+    @Published var fetchedTracks: [Track] = []
+    
     // ═══════════════════════════════════════════════════════════
     // PRIVATE PROPERTIES
     // ═══════════════════════════════════════════════════════════
@@ -55,6 +58,9 @@ final class PlaylistSelectionViewModel: ObservableObject {
     
     /// Combine subscriptions
     private var cancellables = Set<AnyCancellable>()
+    
+    /// Callback to invoke when analysis completes
+    private var analysisCompletionCallback: ((Result<[Track], Error>) -> Void)?
     
     // ═══════════════════════════════════════════════════════════
     // INITIALIZATION
@@ -88,11 +94,59 @@ final class PlaylistSelectionViewModel: ObservableObject {
             }
             .store(in: &cancellables)
             
-        // Observe analysis status
+        // Observe analysis status and trigger completion callback when done
         musicService.$analyzingTrackCount
-            .map { $0 > 0 }
             .receive(on: DispatchQueue.main)
-            .assign(to: &$isAnalyzing)
+            .sink { [weak self] count in
+                guard let self = self else { return }
+                let wasAnalyzing = self.isAnalyzing
+                self.isAnalyzing = count > 0
+                
+                // If analysis just completed and we have a pending callback, re-fetch tracks with cached BPM
+                if wasAnalyzing && !self.isAnalyzing, let callback = self.analysisCompletionCallback {
+                    self.analysisCompletionCallback = nil
+                    
+                    // Re-fetch tracks to get updated BPM values from cache
+                    // The original fetchedTracks don't have BPM because they were created before analysis
+                    print("✅ BPM analysis complete - re-fetching tracks with cached BPM values")
+                    self.refetchTracksWithCachedBPM(completion: callback)
+                }
+            }
+            .store(in: &cancellables)
+    }
+    
+    /// Re-fetch tracks from selected playlists to get updated BPM values from cache
+    /// Called after BPM analysis completes to ensure tracks have their BPM values
+    private func refetchTracksWithCachedBPM(completion: @escaping (Result<[Track], Error>) -> Void) {
+        var allTracks: [Track] = []
+        let group = DispatchGroup()
+        var fetchError: Error?
+        
+        for playlistId in selectedPlaylistIds {
+            group.enter()
+            
+            // Fetch WITHOUT triggering analysis - just use cached values
+            musicService.fetchTracksFromPlaylist(playlistId: playlistId, triggerBPMAnalysis: false) { result in
+                switch result {
+                case .success(let tracks):
+                    allTracks.append(contentsOf: tracks)
+                case .failure(let error):
+                    fetchError = error
+                }
+                group.leave()
+            }
+        }
+        
+        group.notify(queue: .main) { [weak self] in
+            if let error = fetchError {
+                completion(.failure(error))
+            } else {
+                self?.fetchedTracks = allTracks
+                let tracksWithBPM = allTracks.filter { $0.bpm != nil }.count
+                print("📊 Re-fetched \(allTracks.count) tracks, \(tracksWithBPM) have BPM")
+                completion(.success(allTracks))
+            }
+        }
     }
     
     // ═══════════════════════════════════════════════════════════
@@ -146,17 +200,15 @@ final class PlaylistSelectionViewModel: ObservableObject {
         return selectedPlaylistIds.contains(playlistId)
     }
     
-    /// Get all tracks from selected playlists
+    /// Get all tracks from selected playlists and wait for BPM analysis to complete
     ///
-    /// - Parameter completion: Called with array of tracks or error
+    /// - Parameter completion: Called with array of tracks AFTER BPM analysis is done
     ///
-    /// Python equivalent:
-    /// def get_selected_tracks(self, callback: Callable[[List[Track]], None]):
-    ///     all_tracks = []
-    ///     for playlist_id in self.selected_playlist_ids:
-    ///         tracks = self.music_service.fetch_tracks_from_playlist(playlist_id)
-    ///         all_tracks.extend(tracks)
-    ///     callback(all_tracks)
+    /// This method:
+    /// 1. Fetches tracks from all selected playlists
+    /// 2. Triggers BPM analysis for tracks that don't have cached BPM
+    /// 3. Waits for ALL analysis to complete before calling completion
+    /// 4. The completion callback receives tracks with updated BPM values
     func getSelectedTracks(completion: @escaping (Result<[Track], Error>) -> Void) {
         guard !selectedPlaylistIds.isEmpty else {
             completion(.failure(PlaylistSelectionError.noPlaylistsSelected))
@@ -183,11 +235,25 @@ final class PlaylistSelectionViewModel: ObservableObject {
         }
         
         // Wait for all fetches to complete
-        group.notify(queue: .main) {
+        group.notify(queue: .main) { [weak self] in
+            guard let self = self else { return }
+            
             if let error = fetchError {
                 completion(.failure(error))
-            } else {
+                return
+            }
+            
+            // Store fetched tracks
+            self.fetchedTracks = allTracks
+            
+            // If no analysis is happening (all tracks already cached), complete immediately
+            if !self.isAnalyzing {
+                print("✅ All tracks already have BPM cached - completing immediately")
                 completion(.success(allTracks))
+            } else {
+                // Store callback to invoke when analysis completes
+                print("⏳ Waiting for BPM analysis to complete...")
+                self.analysisCompletionCallback = completion
             }
         }
     }

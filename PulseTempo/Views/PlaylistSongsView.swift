@@ -222,9 +222,9 @@ struct PlaylistSongsView: View {
         isLoading = true
         errorMessage = nil
         
-        // Trigger BPM analysis when viewing playlist songs (user is browsing their library)
-        // KNOWN BUG, needs fixing
-        musicService.fetchTracksFromPlaylist(playlistId: playlist.id, triggerBPMAnalysis: true) { result in
+        // Don't trigger BPM analysis when browsing - only analyze when playlist is confirmed for workout
+        // BPM analysis happens in PlaylistSelectionViewModel.getSelectedTracks()
+        musicService.fetchTracksFromPlaylist(playlistId: playlist.id, triggerBPMAnalysis: false) { result in
             DispatchQueue.main.async {
                 isLoading = false
                 

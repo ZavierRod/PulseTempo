@@ -124,9 +124,17 @@ class MusicService: ObservableObject, MusicServiceProtocol {
     /// Track the last song ID we logged to prevent duplicate "NOW PLAYING" logs
     private var lastLoggedSongId: String?
     
-    /// Cache of analyzed BPM values by track ID (persists across fetches)
-    /// Key: track ID (e.g., "i.ABC123"), Value: analyzed BPM
-    private var bpmCache: [String: Int] = [:]
+    /// Cache of analyzed BPM values by track ID (persists across fetches AND app restarts)
+    /// Key: track ID (e.g., "i.ABC123") or "title|artist", Value: analyzed BPM
+    /// Stored in UserDefaults for persistence
+    private var bpmCache: [String: Int] = [:] {
+        didSet {
+            saveBPMCacheToDisk()
+        }
+    }
+    
+    /// UserDefaults key for BPM cache persistence
+    private static let bpmCacheKey = "com.pulsetempo.bpmCache"
     
     /// Set to track Combine subscriptions
     private var cancellables = Set<AnyCancellable>()
@@ -139,7 +147,61 @@ class MusicService: ObservableObject, MusicServiceProtocol {
     init(musicKitManager: MusicKitManager = .shared, player: ApplicationMusicPlayer = .shared) {
         self.musicKitManager = musicKitManager
         self.player = player
+        loadBPMCacheFromDisk()
         setupPlaybackObservers()
+    }
+    
+    // MARK: - Local Network Permission
+    
+    /// Triggers a simple network request to prompt the user for local network permission early.
+    /// This should be called during app initialization to ensure permission is granted
+    /// before BPM analysis is attempted.
+    func warmUpLocalNetworkPermission() {
+        #if targetEnvironment(simulator)
+        let host = "http://localhost:8000"
+        #else
+        // Use Mac's local IP for physical device testing
+        let host = "http://192.168.1.40:8000"
+        #endif
+        
+        guard let url = URL(string: "\(host)/api/health") else {
+            // Fallback: try the analyze endpoint with a simple GET (will fail but triggers permission)
+            guard let fallbackUrl = URL(string: "\(host)/api/tracks/analyze") else { return }
+            URLSession.shared.dataTask(with: fallbackUrl) { _, _, _ in
+                print("🌐 Local network permission warm-up request sent (fallback)")
+            }.resume()
+            return
+        }
+        
+        // Make a simple request to trigger the local network permission dialog
+        URLSession.shared.dataTask(with: url) { _, _, error in
+            if let error = error {
+                print("🌐 Local network warm-up failed (this is expected if backend is not running): \(error.localizedDescription)")
+            } else {
+                print("✅ Local network permission granted and backend is reachable")
+            }
+        }.resume()
+        
+        print("🌐 Local network permission warm-up request sent")
+    }
+    
+    // MARK: - BPM Cache Persistence
+    
+    /// Load BPM cache from UserDefaults on app launch
+    /// This ensures we never re-analyze songs that have already been processed
+    private func loadBPMCacheFromDisk() {
+        if let savedCache = UserDefaults.standard.dictionary(forKey: Self.bpmCacheKey) as? [String: Int] {
+            bpmCache = savedCache
+            print("📦 Loaded \(savedCache.count) cached BPM values from disk")
+        } else {
+            print("📦 No cached BPM values found on disk")
+        }
+    }
+    
+    /// Save BPM cache to UserDefaults for persistence across app restarts
+    private func saveBPMCacheToDisk() {
+        UserDefaults.standard.set(bpmCache, forKey: Self.bpmCacheKey)
+        // Don't print every save to avoid log spam - the didSet triggers on every change
     }
     
     // MARK: - Playback Control
@@ -648,9 +710,9 @@ class MusicService: ObservableObject, MusicServiceProtocol {
                     )
                 }
                 
-                // Only trigger BPM analysis if requested (e.g., during playlist selection)
-                // This avoids redundant network calls when starting workouts
-                // Overall, I want BPM analysis to happen when a user confirms their playlist choice
+                // Only trigger BPM analysis if requested (during playlist confirmation)
+                // BPM values are cached to disk so songs never need re-analysis
+                // When triggerBPMAnalysis=false (e.g., starting workout), we use cached values only
                 let tracksWithCachedBPM = tracks.filter { $0.bpm != nil }.count
                 print("📊 Tracks status: \(tracksWithCachedBPM)/\(tracks.count) have cached BPM")
                 

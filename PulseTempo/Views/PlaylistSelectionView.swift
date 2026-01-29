@@ -245,26 +245,46 @@ struct PlaylistSelectionView: View {
     
     // MARK: - Analysis Overlay
     
+    /// Full-screen overlay that blocks all interaction while BPM analysis is in progress
     private var analysisOverlay: some View {
-        VStack {
-            Spacer()
+        ZStack {
+            // Dimmed background that blocks interaction
+            Color.black.opacity(0.6)
+                .ignoresSafeArea()
             
-            HStack(spacing: 12) {
-                ProgressView()
-                    .tint(.white)
+            // Centered analysis card
+            VStack(spacing: 20) {
+                // Animated music waveform icon
+                Image(systemName: "waveform.circle.fill")
+                    .font(.system(size: 60))
+                    .foregroundColor(.blue)
+                    .symbolEffect(.pulse, options: .repeating)
                 
-                Text("Analyzing BPM...")
-                    .font(.system(size: 14, weight: .semibold))
+                Text("Analyzing BPM")
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
+                
+                Text("Please wait while we analyze the tempo of your songs...")
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.8))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 20)
+                
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    .scaleEffect(1.2)
+                    .padding(.top, 8)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-            .background(Color.black.opacity(0.8))
-            .cornerRadius(20)
-            .padding(.bottom, 100) // Above the tab bar/bottom bar
-            .transition(.move(edge: .bottom).combined(with: .opacity))
+            .padding(32)
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(Color(white: 0.15))
+                    .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: 10)
+            )
+            .padding(.horizontal, 40)
         }
-        .animation(.spring(), value: viewModel.isAnalyzing)
+        .transition(.opacity)
+        .animation(.easeInOut(duration: 0.3), value: viewModel.isAnalyzing)
     }
     
     // MARK: - Helper Methods
@@ -275,6 +295,8 @@ struct PlaylistSelectionView: View {
         let playlistIds = Array(viewModel.selectedPlaylistIds)
         PlaylistStorageManager.shared.saveSelectedPlaylists(playlistIds)
         
+        // Fetch tracks and wait for BPM analysis to complete before navigating
+        // The loading overlay will be shown automatically while isAnalyzing is true
         viewModel.getSelectedTracks { result in
             switch result {
             case .success(let tracks):
@@ -283,11 +305,6 @@ struct PlaylistSelectionView: View {
                 viewModel.errorMessage = error.localizedDescription
             }
         }
-        // This is where I want BPM analysis to happen, not when a user views the playlist after the fact
-        // This is a known bug that will be fixed, here is a rough implementation that I thought up
-        // for id in playlistIds {
-        //     musicService.fetchTracksFromPlaylist(playlistId: id, triggerBPMAnalysis: true)
-        // }
     }
 }
 
