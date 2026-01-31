@@ -782,6 +782,7 @@ final class RunSessionViewModel: ObservableObject {
         case .steadyTempo: return 10
         case .progressiveBuild: return 15
         case .recovery: return 8
+        case .cadenceMatching: return 15  // Wider tolerance for cadence matching
         }
     }
     
