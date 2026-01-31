@@ -115,7 +115,11 @@ final class RunSessionViewModel: ObservableObject {
     // RUN METRICS TRACKING
     private var runStartTime: Date?              // When the run started
     private var heartRateSamples: [Int] = []     // All HR samples for averaging
+    private var cadenceSamples: [Int] = []       // All cadence samples for averaging
     private var runTimer: Timer?                 // Timer for updating elapsed time
+    
+    /// Average cadence over the run (calculated from samples)
+    @Published var averageCadence: Int = 0
     
     // COMBINE SUBSCRIPTIONS
     // Store subscriptions so they don't get deallocated
@@ -182,7 +186,17 @@ final class RunSessionViewModel: ObservableObject {
         // OBSERVE CADENCE CHANGES (from Apple Watch)
         heartRateService.currentCadencePublisher
             .sink { [weak self] cadence in
-                self?.currentCadence = cadence
+                guard let self = self else { return }
+                self.currentCadence = cadence
+                
+                // Only track samples when run is active and cadence > 0
+                if self.sessionState == .active && cadence > 0 {
+                    self.cadenceSamples.append(cadence)
+                    // Calculate rolling average
+                    if !self.cadenceSamples.isEmpty {
+                        self.averageCadence = self.cadenceSamples.reduce(0, +) / self.cadenceSamples.count
+                    }
+                }
             }
             .store(in: &cancellables)
         
@@ -399,6 +413,7 @@ final class RunSessionViewModel: ObservableObject {
         sessionState = .active
         runStartTime = Date()
         heartRateSamples.removeAll()
+        cadenceSamples.removeAll()
         playedTrackIds.removeAll()
         tracksPlayed.removeAll()
         tracksPlayedInternal.removeAll()
@@ -484,12 +499,46 @@ final class RunSessionViewModel: ObservableObject {
         // Calculate final metrics
         calculateFinalMetrics()
         
+        // Save run to backend (if authenticated)
+        saveRunToBackend()
+        
         // Send to watch if requested (avoid loop when receiving from watch)
         if sendToWatch {
             watchConnectivityManager.sendFinishWorkoutCommand()
         }
         
         print("🏁 [iOS] Workout finished - showing summary")
+    }
+    
+    /// Save the completed run to the backend
+    private func saveRunToBackend() {
+        guard let startTime = runStartTime else {
+            print("⚠️ [iOS] Cannot save run - no start time")
+            return
+        }
+        
+        // Only save if user is authenticated
+        guard AuthService.shared.isAuthenticated else {
+            print("ℹ️ [iOS] User not authenticated - run not saved to backend")
+            return
+        }
+        
+        let endTime = Date()
+        
+        Task {
+            do {
+                let savedRun = try await APIService.shared.saveRun(
+                    startTime: startTime,
+                    endTime: endTime,
+                    avgHeartRate: averageHeartRate > 0 ? averageHeartRate : nil,
+                    avgCadence: averageCadence > 0 ? averageCadence : nil
+                )
+                print("✅ [iOS] Run saved to backend (ID: \(savedRun.id))")
+            } catch {
+                print("⚠️ [iOS] Failed to save run to backend: \(error.localizedDescription)")
+                // Don't show error to user - run is still saved locally in summary
+            }
+        }
     }
     
     /// Discard the run session - doesn't save, just stops
@@ -531,6 +580,7 @@ final class RunSessionViewModel: ObservableObject {
         
         // Reset metrics for next workout
         averageHeartRate = 0
+        averageCadence = 0
         maxHeartRate = 0
         elapsedTime = 0
         tracksPlayed = []

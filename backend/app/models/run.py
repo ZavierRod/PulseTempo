@@ -12,6 +12,7 @@ class Run(Base):
     start_time = Column(DateTime(timezone=True), nullable=False)
     end_time = Column(DateTime(timezone=True), nullable=False)
     avg_heart_rate = Column(Integer, nullable=True)
+    avg_cadence = Column(Integer, nullable=True)  # steps per minute
     total_distance = Column(Float, nullable=True)  # in meters
 
     # Relationships

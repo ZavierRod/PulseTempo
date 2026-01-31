@@ -1,4 +1,4 @@
-from typing import Any, List
+from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -13,21 +13,26 @@ router = APIRouter()
 class RunTrackCreate(BaseModel):
     track_id: str
     played_at: datetime
-    heart_rate_at_start: int | None = None
+    heart_rate_at_start: Optional[int] = None
 
 class RunCreate(BaseModel):
     start_time: datetime
     end_time: datetime
-    avg_heart_rate: int | None = None
-    total_distance: float | None = None
+    avg_heart_rate: Optional[int] = None
+    avg_cadence: Optional[int] = None
+    total_distance: Optional[float] = None
     tracks: List[RunTrackCreate] = []
 
 class RunResponse(BaseModel):
     id: UUID
     start_time: datetime
     end_time: datetime
-    avg_heart_rate: int | None
-    total_distance: float | None
+    avg_heart_rate: Optional[int]
+    avg_cadence: Optional[int]
+    total_distance: Optional[float]
+    
+    class Config:
+        from_attributes = True
 
 @router.post("/", response_model=RunResponse)
 def create_run(
@@ -43,6 +48,7 @@ def create_run(
         start_time=run_in.start_time,
         end_time=run_in.end_time,
         avg_heart_rate=run_in.avg_heart_rate,
+        avg_cadence=run_in.avg_cadence,
         total_distance=run_in.total_distance
     )
     db.add(run)

@@ -24,8 +24,14 @@ final class HomeViewModel: ObservableObject {
     /// Last workout summary (if available)
     @Published var lastWorkout: WorkoutSummary?
     
+    /// Full run history from backend
+    @Published var runHistory: [WorkoutSummary] = []
+    
     /// Loading state
     @Published var isLoading: Bool = false
+    
+    /// Whether run history is loading
+    @Published var isLoadingHistory: Bool = false
     
     /// Error message if something goes wrong
     @Published var errorMessage: String?
@@ -97,11 +103,52 @@ final class HomeViewModel: ObservableObject {
         totalTrackCount = selectedPlaylists.reduce(0) { $0 + $1.trackCount }
     }
     
-    /// Load last workout summary
+    /// Load last workout summary and run history from backend
     private func loadLastWorkout() {
-        // TODO: Load from persistent storage
-        // Placeholder for now
-        lastWorkout = nil
+        // Only fetch if user is authenticated
+        guard AuthService.shared.isAuthenticated else {
+            lastWorkout = nil
+            runHistory = []
+            return
+        }
+        
+        isLoadingHistory = true
+        
+        Task {
+            do {
+                let runs = try await APIService.shared.fetchRunHistory()
+                
+                await MainActor.run {
+                    // Convert RunResponse to WorkoutSummary
+                    self.runHistory = runs.map { run in
+                        WorkoutSummary(
+                            id: run.id,
+                            date: run.startTime,
+                            durationMinutes: run.durationMinutes,
+                            averageBPM: run.avgHeartRate ?? 0,
+                            averageCadence: run.avgCadence ?? 0,
+                            songsPlayed: 0  // Not tracked per-run yet
+                        )
+                    }
+                    
+                    // Set last workout to most recent
+                    self.lastWorkout = self.runHistory.first
+                    self.isLoadingHistory = false
+                    
+                    print("📊 [Home] Loaded \(self.runHistory.count) workouts from backend")
+                }
+            } catch {
+                await MainActor.run {
+                    self.isLoadingHistory = false
+                    print("⚠️ [Home] Failed to load run history: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+    
+    /// Refresh run history from backend
+    func refreshRunHistory() {
+        loadLastWorkout()
     }
     
     /// Save selected playlists to storage
@@ -164,6 +211,7 @@ struct WorkoutSummary: Identifiable {
     let date: Date
     let durationMinutes: Int
     let averageBPM: Int
+    let averageCadence: Int
     let songsPlayed: Int
     
     /// Formatted date string
@@ -183,5 +231,10 @@ struct WorkoutSummary: Identifiable {
             let minutes = durationMinutes % 60
             return "\(hours)h \(minutes)m"
         }
+    }
+    
+    /// Formatted cadence string
+    var formattedCadence: String {
+        return "\(averageCadence) SPM"
     }
 }

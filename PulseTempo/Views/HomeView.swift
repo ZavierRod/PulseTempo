@@ -20,6 +20,7 @@ struct HomeView: View {
     @State private var showingActiveRun = false
     @State private var showingPlaylistSelection = false
     @State private var selectedPlaylistForViewing: MusicPlaylist?
+    @State private var showingRunHistory = false
     
     /// Workout tracks state
     @State private var workoutTracks: [Track] = []
@@ -95,6 +96,10 @@ struct HomeView: View {
             }
             .onAppear {
                 viewModel.refreshPlaylists()
+                viewModel.refreshRunHistory()
+            }
+            .sheet(isPresented: $showingRunHistory) {
+                RunHistoryView(runHistory: viewModel.runHistory)
             }
             .overlay {
                 // Waiting for Watch overlay
@@ -325,47 +330,60 @@ struct HomeView: View {
     // MARK: - Last Workout Section
     
     private func lastWorkoutSection(_ workout: WorkoutSummary) -> some View {
-        VStack(spacing: 12) {
-            HStack {
-                Text("Last Workout")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(.primary)
-                
-                Spacer()
-            }
-            
-            HStack(spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(workout.formattedDate)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+        Button(action: {
+            showingRunHistory = true
+        }) {
+            VStack(spacing: 12) {
+                HStack {
+                    Text("Last Workout")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.primary)
                     
-                    HStack(spacing: 12) {
-                        Label("\(workout.formattedDuration)", systemImage: "clock")
-                        Label("\(workout.averageBPM) BPM", systemImage: "heart.fill")
-                        Label("\(workout.songsPlayed) songs", systemImage: "music.note")
+                    Spacer()
+                    
+                    if viewModel.runHistory.count > 1 {
+                        Text("See All (\(viewModel.runHistory.count))")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.blue)
                     }
-                    .font(.system(size: 14))
-                    .foregroundColor(.primary)
                 }
                 
-                Spacer()
-                
-                Image(systemName: "chevron.right")
-                    .foregroundColor(.secondary)
+                HStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(workout.formattedDate)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        
+                        HStack(spacing: 12) {
+                            Label("\(workout.formattedDuration)", systemImage: "clock")
+                            Label("\(workout.averageBPM) BPM", systemImage: "heart.fill")
+                            if workout.averageCadence > 0 {
+                                Label("\(workout.averageCadence) SPM", systemImage: "figure.run")
+                            }
+                        }
+                        .font(.system(size: 14))
+                        .foregroundColor(.primary)
+                    }
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .foregroundColor(.secondary)
+                }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.blue.opacity(0.1))
+                )
             }
-            .padding(16)
+            .padding(20)
             .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.blue.opacity(0.1))
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(Color.white.opacity(0.8))
+                    .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 4)
             )
         }
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(Color.white.opacity(0.8))
-                .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 4)
-        )
+        .buttonStyle(PlainButtonStyle())
     }
     
     // MARK: - Helper Methods

@@ -1,4 +1,4 @@
-from typing import Any, List
+from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
@@ -15,16 +15,16 @@ class TrackCreate(BaseModel):
     id: str
     title: str
     artist: str
-    bpm: float | None = None
-    confidence: float | None = None
+    bpm: Optional[float] = None
+    confidence: Optional[float] = None
 
 
 class TrackResponse(BaseModel):
     id: str
     title: str
     artist: str
-    bpm: float | None
-    confidence: float | None
+    bpm: Optional[float]
+    confidence: Optional[float]
 
 
 class TrackAnalyzeRequest(BaseModel):

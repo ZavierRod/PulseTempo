@@ -9,6 +9,7 @@ struct OnboardingCoordinator: View {
     /// Represents the current step in the onboarding experience.
     enum OnboardingStep {
         case welcome
+        case authentication  // NEW: Sign up or log in
         case wearableSelection
         case healthKit
         case musicKit
@@ -75,6 +76,16 @@ struct OnboardingCoordinator: View {
                 WelcomeView {
                     advanceFromWelcome()
                 }
+            
+            case .authentication:
+                AuthenticationView(
+                    onAuthenticated: {
+                        advanceFromAuthentication()
+                    },
+                    onBack: {
+                        currentStep = .welcome
+                    }
+                )
             
             case .wearableSelection:
                 WearableSelectionView(
@@ -183,6 +194,9 @@ struct OnboardingCoordinator: View {
         case .welcome:
             // Stay on the welcome step until the user taps "Get Started".
             break
+        case .authentication:
+            // Stay on authentication until user signs in
+            break
         case .wearableSelection:
             // Stay on wearable selection until user chooses a device
             break
@@ -199,8 +213,13 @@ struct OnboardingCoordinator: View {
         }
     }
 
-    /// Advances from the welcome screen to the next required step, if any.
+    /// Advances from the welcome screen to authentication.
     private func advanceFromWelcome() {
+        currentStep = .authentication
+    }
+    
+    /// Advances from authentication to wearable selection.
+    private func advanceFromAuthentication() {
         currentStep = .wearableSelection
     }
     
