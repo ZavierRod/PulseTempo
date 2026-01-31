@@ -35,11 +35,15 @@ struct ActiveRunView: View {
     @State private var heartBeat = false           // Toggles to trigger animation
     @State private var beatTimer: Timer? = nil     // Timer that fires at heart rate interval
     
+    /// The workout mode for this session
+    private let runMode: RunMode
+    
     // INITIALIZER
-    // Create the ViewModel with tracks when the view is created
-    init(tracks: [Track]) {
+    // Create the ViewModel with tracks and run mode when the view is created
+    init(tracks: [Track], runMode: RunMode = .steadyTempo) {
+        self.runMode = runMode
         // _runSessionVM accesses the underlying StateObject wrapper
-        _runSessionVM = StateObject(wrappedValue: RunSessionViewModel(tracks: tracks))
+        _runSessionVM = StateObject(wrappedValue: RunSessionViewModel(tracks: tracks, runMode: runMode))
     }
     
     // COMPUTED PROPERTIES
@@ -318,8 +322,10 @@ struct ActiveRunView: View {
                     .padding(.horizontal, 4)                        // Small horizontal padding
                     
                     // HELPER TEXT
-                    // Explains what the app is doing
-                    Text("Matching songs between 148–158 BPM to your heart rate.")
+                    // Explains what the app is doing - dynamically based on mode
+                    Text(runMode == .cadenceMatching
+                         ? "Matching songs to your running cadence (\(runSessionVM.currentCadence) SPM)."
+                         : "Matching songs to your heart rate (\(runSessionVM.currentHeartRate) BPM).")
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)            // Center-align text

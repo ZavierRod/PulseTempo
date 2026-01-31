@@ -75,6 +75,7 @@ struct Playlist: Identifiable, Equatable, Hashable {
 //     STEADY_TEMPO = "steadyTempo"
 //     PROGRESSIVE_BUILD = "progressiveBuild"
 //     RECOVERY = "recovery"
+//     CADENCE_MATCHING = "cadenceMatching"
 //
 // PROTOCOLS:
 // - String: the raw value type (each case has a string value)
@@ -82,9 +83,10 @@ struct Playlist: Identifiable, Equatable, Hashable {
 // - Identifiable: has an id property
 enum RunMode: String, CaseIterable, Identifiable {
     // CASES (the possible values)
-    case steadyTempo          // Maintain consistent pace
+    case steadyTempo          // Maintain consistent pace (matches to heart rate)
     case progressiveBuild     // Gradually increase intensity
     case recovery             // Low intensity recovery run
+    case cadenceMatching      // Match songs to running cadence (steps per minute)
     
     // COMPUTED PROPERTY: id
     // Returns the raw string value as the id
@@ -97,11 +99,58 @@ enum RunMode: String, CaseIterable, Identifiable {
     var displayName: String {
         switch self {                      // Check which case this is
         case .steadyTempo:                 // If it's steadyTempo
-            return "Steady Tempo"          // Return this string
+            return "Heart Rate"            // Return this string
         case .progressiveBuild:            // If it's progressiveBuild
             return "Progressive Build"     // Return this string
         case .recovery:                    // If it's recovery
             return "Recovery"              // Return this string
+        case .cadenceMatching:             // If it's cadenceMatching
+            return "Cadence"               // Return this string
+        }
+    }
+    
+    // COMPUTED PROPERTY: description
+    // Returns a description of what this mode does
+    var description: String {
+        switch self {
+        case .steadyTempo:
+            return "Match songs to your heart rate"
+        case .progressiveBuild:
+            return "Gradually increase intensity"
+        case .recovery:
+            return "Low intensity recovery"
+        case .cadenceMatching:
+            return "Match songs to your running cadence"
+        }
+    }
+    
+    // COMPUTED PROPERTY: icon
+    // Returns an SF Symbol name for this mode
+    var icon: String {
+        switch self {
+        case .steadyTempo:
+            return "heart.fill"
+        case .progressiveBuild:
+            return "chart.line.uptrend.xyaxis"
+        case .recovery:
+            return "leaf.fill"
+        case .cadenceMatching:
+            return "figure.run"
+        }
+    }
+    
+    // COMPUTED PROPERTY: color
+    // Returns a color associated with this mode
+    var color: String {
+        switch self {
+        case .steadyTempo:
+            return "red"
+        case .progressiveBuild:
+            return "orange"
+        case .recovery:
+            return "green"
+        case .cadenceMatching:
+            return "cyan"
         }
     }
 }

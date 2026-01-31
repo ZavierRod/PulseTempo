@@ -27,6 +27,9 @@ struct HomeView: View {
     @State private var isLoadingTracks = false
     @State private var trackLoadError: String?
     
+    /// Selected workout mode (Heart Rate vs Cadence)
+    @State private var selectedRunMode: RunMode = .steadyTempo
+    
     // MARK: - Body
     
     var body: some View {
@@ -76,7 +79,7 @@ struct HomeView: View {
                 }
             }
             .fullScreenCover(isPresented: $showingActiveRun) {
-                ActiveRunView(tracks: workoutTracks)
+                ActiveRunView(tracks: workoutTracks, runMode: selectedRunMode)
             }
             .sheet(isPresented: $showingPlaylistSelection) {
                 PlaylistSelectionView { tracks in
@@ -181,6 +184,9 @@ struct HomeView: View {
     
     private var quickStartSection: some View {
         VStack(spacing: 16) {
+            // Workout Mode Selector
+            workoutModeSelector
+            
             // Main Start Workout Button
             Button(action: startWorkout) {
                 HStack {
@@ -207,7 +213,9 @@ struct HomeView: View {
                 .padding(20)
                 .background(
                     LinearGradient(
-                        colors: [Color.blue, Color.purple],
+                        colors: selectedRunMode == .cadenceMatching
+                            ? [Color.cyan, Color.blue]
+                            : [Color.blue, Color.purple],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
@@ -243,6 +251,34 @@ struct HomeView: View {
                 .fill(Color.white.opacity(0.8))
                 .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 4)
         )
+    }
+    
+    // MARK: - Workout Mode Selector
+    
+    /// Toggle between Heart Rate and Cadence matching modes
+    private var workoutModeSelector: some View {
+        VStack(spacing: 8) {
+            Text("Match Music To")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.secondary)
+            
+            HStack(spacing: 12) {
+                // Heart Rate Mode Button
+                WorkoutModeButton(
+                    mode: .steadyTempo,
+                    isSelected: selectedRunMode == .steadyTempo,
+                    action: { selectedRunMode = .steadyTempo }
+                )
+                
+                // Cadence Mode Button
+                WorkoutModeButton(
+                    mode: .cadenceMatching,
+                    isSelected: selectedRunMode == .cadenceMatching,
+                    action: { selectedRunMode = .cadenceMatching }
+                )
+            }
+        }
+        .padding(.bottom, 8)
     }
     
     // MARK: - Playlist Management Section
@@ -457,6 +493,57 @@ struct InfoPill: View {
             Capsule()
                 .fill(color.opacity(0.15))
         )
+    }
+}
+
+// MARK: - Workout Mode Button Component
+
+/// Button for selecting workout mode (Heart Rate vs Cadence)
+struct WorkoutModeButton: View {
+    let mode: RunMode
+    let isSelected: Bool
+    let action: () -> Void
+    
+    private var modeColor: Color {
+        switch mode {
+        case .steadyTempo:
+            return .red
+        case .cadenceMatching:
+            return .cyan
+        default:
+            return .blue
+        }
+    }
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: mode.icon)
+                    .font(.system(size: 22, weight: .semibold))
+                
+                Text(mode.displayName)
+                    .font(.system(size: 13, weight: .semibold))
+                
+                Text(mode.description)
+                    .font(.system(size: 10))
+                    .foregroundColor(isSelected ? modeColor.opacity(0.8) : .secondary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+            }
+            .foregroundColor(isSelected ? modeColor : .secondary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .padding(.horizontal, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(isSelected ? modeColor.opacity(0.15) : Color.gray.opacity(0.1))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isSelected ? modeColor : Color.clear, lineWidth: 2)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 }
 

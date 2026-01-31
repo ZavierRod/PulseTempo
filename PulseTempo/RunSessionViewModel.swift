@@ -76,7 +76,8 @@ final class RunSessionViewModel: ObservableObject {
     // ═══════════════════════════════════════════════════════════
     // MARK: - Properties
     
-    let runMode: RunMode = .steadyTempo          // The workout mode (constant for now)
+    /// The workout mode - determines whether to match songs to heart rate or cadence
+    let runMode: RunMode
     
     // ═══════════════════════════════════════════════════════════
     // PRIVATE PROPERTIES
@@ -133,25 +134,28 @@ final class RunSessionViewModel: ObservableObject {
     
     // INITIALIZER (Constructor)
     // Like Python's __init__ method
-    // Called when creating a new instance: let vm = RunSessionViewModel(tracks: myTracks)
+    // Called when creating a new instance: let vm = RunSessionViewModel(tracks: myTracks, runMode: .cadenceMatching)
     //
     // Python equivalent:
-    // def __init__(self, tracks):
+    // def __init__(self, tracks, run_mode):
     //     self.heart_rate_service = HeartRateService()
     //     self.music_service = MusicService()
     //     self.tracks = tracks
+    //     self.run_mode = run_mode
     //     self._setup_observers()
     init(
         tracks: [Track] = [],
+        runMode: RunMode = .steadyTempo,
         heartRateService: HeartRateServiceProtocol = HeartRateService(),
-        musicService: MusicServiceProtocol = MusicService.shared,
+        musicService: MusicServiceProtocol = MusicService.shared
     ) {
+        self.runMode = runMode
         self.heartRateService = heartRateService
         self.musicService = musicService
         self.tracks = tracks.isEmpty ? createFakeTracks() : tracks
         setupObservers()                         // Connect to service updates
         
-        print("🎵 RunSessionViewModel initialized with \(self.tracks.count) tracks")
+        print("🎵 RunSessionViewModel initialized with \(self.tracks.count) tracks, mode: \(runMode.displayName)")
     }
     
     // ═══════════════════════════════════════════════════════════
@@ -195,6 +199,11 @@ final class RunSessionViewModel: ObservableObject {
                     // Calculate rolling average
                     if !self.cadenceSamples.isEmpty {
                         self.averageCadence = self.cadenceSamples.reduce(0, +) / self.cadenceSamples.count
+                    }
+                    
+                    // If in cadence matching mode, update queued track based on cadence
+                    if self.runMode == .cadenceMatching {
+                        self.updateQueuedNextTrackForCadence(cadence)
                     }
                 }
             }
@@ -435,8 +444,17 @@ final class RunSessionViewModel: ObservableObject {
         
         // Start music playback with initial track selection
         if !tracks.isEmpty {
-            // Select first track based on initial heart rate (or default 120 BPM)
-            let initialTrack = selectTrackForHeartRate(120)
+            // Select first track based on mode
+            let initialTrack: Track
+            if runMode == .cadenceMatching {
+                // For cadence mode, start with a track around typical running cadence (170 SPM)
+                initialTrack = selectTrackForCadence(170)
+                print("🏃 Starting workout in Cadence Matching mode")
+            } else {
+                // For heart rate modes, select based on initial heart rate (or default 120 BPM)
+                initialTrack = selectTrackForHeartRate(120)
+                print("💓 Starting workout in \(runMode.displayName) mode")
+            }
             
             // Set current track immediately so UI shows it
             queueTrackForPlayback(initialTrack, historyBaseline: [])
@@ -618,14 +636,22 @@ final class RunSessionViewModel: ObservableObject {
     /// Per ROADMAP: User manually skips forward - this is one of two ways queued track plays
     /// (The other is when current song ends naturally)
     /// - Parameter approximateHeartRate: Optional heart rate to use for track selection (defaults to current heart rate)
+    /// In cadence mode, uses current cadence instead of heart rate
     func skipToNextTrack(approximateHeartRate: Int? = nil) {
         navigationQueue.async { [weak self] in
             guard let self else { return }
             guard self.allowNavigationAction(.next) else { return }
             guard !self.tracks.isEmpty else { return }
 
-            let targetHeartRate = approximateHeartRate ?? self.currentHeartRate
-            let nextTrack = self.selectTrackForHeartRate(targetHeartRate)
+            let nextTrack: Track
+            if self.runMode == .cadenceMatching {
+                // In cadence mode, select based on current cadence
+                nextTrack = self.selectTrackForCadence(self.currentCadence > 0 ? self.currentCadence : 170)
+            } else {
+                // In heart rate modes, select based on heart rate
+                let targetHeartRate = approximateHeartRate ?? self.currentHeartRate
+                nextTrack = self.selectTrackForHeartRate(targetHeartRate)
+            }
             self.playTrack(nextTrack)
             
             // Clear queued track since we're manually navigating
@@ -668,12 +694,13 @@ final class RunSessionViewModel: ObservableObject {
     
     /// Called when heart rate changes - implements smart track selection
     /// Per ROADMAP: Continuously monitors HR and intelligently selects NEXT track
+    /// Only triggers track selection in heart rate-based modes (not cadence matching)
     private func onHeartRateChanged(_ heartRate: Int) {
         currentHeartRate = heartRate
         
         guard sessionState == .active else { return }
         
-        // Track metrics
+        // Track metrics (always, regardless of mode)
         heartRateSamples.append(heartRate)
         if heartRate > maxHeartRate {
             maxHeartRate = heartRate
@@ -684,9 +711,13 @@ final class RunSessionViewModel: ObservableObject {
             averageHeartRate = heartRateSamples.reduce(0, +) / heartRateSamples.count
         }
         
-        // Update queued next track based on HR changes
-        // Per ROADMAP: Never interrupt current song, queue intelligently updates
-        updateQueuedNextTrack(heartRate)
+        // Only update queued track based on HR in heart rate-based modes
+        // In cadence matching mode, track selection is handled by cadence observer
+        if runMode != .cadenceMatching {
+            // Update queued next track based on HR changes
+            // Per ROADMAP: Never interrupt current song, queue intelligently updates
+            updateQueuedNextTrack(heartRate)
+        }
     }
     
     /// Update the queued next track based on current heart rate
@@ -826,6 +857,122 @@ final class RunSessionViewModel: ObservableObject {
         
         let difference = abs(Double(trackBPM) - idealTrackBPM)
         return max(0, 1 - difference / 50.0)
+    }
+    
+    // ═══════════════════════════════════════════════════════════
+    // PRIVATE METHODS - Cadence-Based Track Selection
+    // ═══════════════════════════════════════════════════════════
+    // MARK: - Cadence Handling
+    
+    /// Update the queued next track based on current running cadence
+    /// Similar to updateQueuedNextTrack but uses cadence (SPM) instead of heart rate
+    /// Running cadence typically ranges from 150-190 SPM
+    ///
+    /// Key Insight: Cadence maps well to music BPM:
+    /// - Direct match: 170 SPM → 170 BPM song
+    /// - Half-time match: 170 SPM → 85 BPM song (for slower songs)
+    private func updateQueuedNextTrackForCadence(_ cadence: Int) {
+        // Don't update queue until we have a current track playing
+        guard currentTrack != nil else {
+            print("⏸️ [Cadence] Skipping queue update - no current track playing yet")
+            return
+        }
+        
+        // Throttle queue updates to prevent excessive rebuilds
+        if let lastUpdate = lastQueueUpdateTime,
+           Date().timeIntervalSince(lastUpdate) < queueUpdateThrottleInterval {
+            return
+        }
+        
+        // Select the best track for current cadence
+        let bestMatchTrack = selectTrackForCadence(cadence)
+        
+        // Only update queue if it's different from what's already queued
+        guard queuedNextTrack?.id != bestMatchTrack.id else {
+            return
+        }
+        
+        // Validate the track has necessary data
+        guard !bestMatchTrack.title.isEmpty, !bestMatchTrack.artist.isEmpty else {
+            print("⚠️ [Cadence] Skipping queue update - selected track has invalid metadata")
+            return
+        }
+        
+        // Update our internal queue state
+        let hadPreviouslyQueuedTrack = queuedNextTrack != nil
+        queuedNextTrack = bestMatchTrack
+        
+        // Replace the queued track
+        musicService.replaceNext(track: bestMatchTrack)
+        
+        // Record the time of this update for throttling
+        lastQueueUpdateTime = Date()
+        
+        let action = hadPreviouslyQueuedTrack ? "Replaced" : "Queued"
+        let trackBPM = bestMatchTrack.bpm ?? 0
+        let bpmDiff = abs(trackBPM - cadence)
+        let halfCadenceDiff = abs(trackBPM - cadence / 2)
+        let bestDiff = min(bpmDiff, halfCadenceDiff)
+        print("🏃 [Cadence] \(action) next track: \(bestMatchTrack.title) (\(trackBPM) BPM, diff: \(bestDiff)) for cadence: \(cadence) SPM")
+    }
+    
+    /// Select best track for given cadence with smart BPM matching
+    /// Matches track BPM to cadence directly, or to half cadence for slower songs
+    private func selectTrackForCadence(_ cadence: Int) -> Track {
+        // Get current track ID to exclude from selection
+        let currentTrackId = currentTrack?.id
+        
+        // Filter out: 1) already played tracks, 2) currently playing track
+        var availableTracks = tracks.filter { track in
+            !playedTrackIds.contains(track.id) && track.id != currentTrackId
+        }
+        
+        // If all tracks have been played, reset and allow repeats
+        if availableTracks.isEmpty {
+            print("🔄 [Cadence] All tracks played, resetting pool for repeat cycle")
+            playedTrackIds.removeAll()
+            availableTracks = tracks.filter { $0.id != currentTrackId }
+        }
+        
+        let scoredTracks = availableTracks.map { track -> (score: Double, track: Track) in
+            let score = scoreTrackForCadence(track, cadence: cadence)
+            return (score, track)
+        }
+        
+        guard let bestMatch = scoredTracks.max(by: { $0.score < $1.score }) else {
+            return tracks[0]
+        }
+        
+        return bestMatch.track
+    }
+    
+    /// Score a track for cadence matching (higher = better)
+    /// Uses both direct cadence match and half-cadence match for flexibility
+    private func scoreTrackForCadence(_ track: Track, cadence: Int) -> Double {
+        guard let trackBPM = track.bpm else {
+            // If track has no BPM data, give it a moderate score
+            print("⚠️ [Cadence] Track '\(track.title)' has no BPM data, using fallback score")
+            return 0.5
+        }
+        
+        // Calculate match scores for both direct and half-cadence
+        // Direct match: BPM ≈ cadence (e.g., 170 BPM for 170 SPM)
+        let directDifference = abs(trackBPM - cadence)
+        let directScore = max(0, 1 - Double(directDifference) / 50.0)
+        
+        // Half-cadence match: BPM ≈ cadence/2 (e.g., 85 BPM for 170 SPM)
+        // Good for slower, groovier songs where you take 2 steps per beat
+        let halfCadence = cadence / 2
+        let halfDifference = abs(trackBPM - halfCadence)
+        let halfScore = max(0, 1 - Double(halfDifference) / 30.0)
+        
+        // Use the better of the two scores (70% weight)
+        let bpmScore = max(directScore, halfScore * 0.9)  // Slight preference for direct match
+        
+        // Variety score (30% weight) - prefer unplayed tracks
+        let varietyScore = playedTrackIds.contains(track.id) ? 0.5 : 1.0
+        
+        return (bpmScore * 0.7) + (varietyScore * 0.3)
     }
     
     // ═══════════════════════════════════════════════════════════
