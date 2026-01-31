@@ -33,6 +33,12 @@ class WatchConnectivityManager: NSObject, ObservableObject {
     /// Whether a workout is active on the watch
     @Published var isWatchWorkoutActive: Bool = false
     
+    /// Whether the watch workout is paused
+    @Published var isWatchWorkoutPaused: Bool = false
+    
+    /// Whether the watch workout just finished (for showing summary)
+    @Published var didWatchWorkoutFinish: Bool = false
+    
     /// Connection status message for debugging
     @Published var connectionStatus: String = "Not connected"
     
@@ -47,6 +53,21 @@ class WatchConnectivityManager: NSObject, ObservableObject {
     
     /// Callback when watch confirms workout started
     var onWatchWorkoutStarted: (() -> Void)?
+    
+    /// Callback when watch pauses workout
+    var onWatchWorkoutPaused: (() -> Void)?
+    
+    /// Callback when watch resumes workout
+    var onWatchWorkoutResumed: (() -> Void)?
+    
+    /// Callback when watch finishes workout (saved)
+    var onWatchWorkoutFinished: (() -> Void)?
+    
+    /// Callback when watch discards workout (not saved)
+    var onWatchWorkoutDiscarded: (() -> Void)?
+    
+    /// Callback when watch dismisses summary and returns to home
+    var onWatchSummaryDismissed: (() -> Void)?
     
     /// Timestamp of last received heart rate
     @Published var lastHeartRateUpdate: Date?
@@ -87,6 +108,31 @@ class WatchConnectivityManager: NSObject, ObservableObject {
     /// Send a command to stop workout on watch
     func sendStopWorkoutCommand() {
         sendCommand("stopWorkout")
+    }
+    
+    /// Send a command to pause workout on watch
+    func sendPauseWorkoutCommand() {
+        sendCommand("pauseWorkout")
+    }
+    
+    /// Send a command to resume workout on watch
+    func sendResumeWorkoutCommand() {
+        sendCommand("resumeWorkout")
+    }
+    
+    /// Send a command to finish workout on watch (save to HealthKit)
+    func sendFinishWorkoutCommand() {
+        sendCommand("finishWorkout")
+    }
+    
+    /// Send a command to discard workout on watch (don't save)
+    func sendDiscardWorkoutCommand() {
+        sendCommand("discardWorkout")
+    }
+    
+    /// Send a command to dismiss summary and go home on watch
+    func sendDismissSummaryCommand() {
+        sendCommand("dismissSummary")
     }
     
     /// Send now playing info to watch
@@ -200,8 +246,26 @@ extension WatchConnectivityManager: WCSessionDelegate {
             handleWorkoutStateMessage(message)
         case "workoutRequest":
             handleWorkoutRequestMessage(message)
+        case "command":
+            handleCommandMessage(message)
         default:
             print("⚠️ [iOS] Unknown message type: \(type)")
+        }
+    }
+    
+    /// Handle command messages from watch
+    private func handleCommandMessage(_ message: [String: Any]) {
+        guard let action = message["action"] as? String else { return }
+        
+        print("🎮 [iOS] Received command from watch: \(action)")
+        
+        DispatchQueue.main.async {
+            switch action {
+            case "dismissSummary":
+                self.onWatchSummaryDismissed?()
+            default:
+                print("⚠️ [iOS] Unknown command from watch: \(action)")
+            }
         }
     }
     
@@ -222,25 +286,64 @@ extension WatchConnectivityManager: WCSessionDelegate {
     /// Process workout state changes from watch
     private func handleWorkoutStateMessage(_ message: [String: Any]) {
         guard let isActive = message["isActive"] as? Bool else { return }
+        let isPaused = message["isPaused"] as? Bool ?? false
+        let wasFinished = message["wasFinished"] as? Bool ?? false
         
         DispatchQueue.main.async {
+            let wasActive = self.isWatchWorkoutActive
+            let wasPaused = self.isWatchWorkoutPaused
+            
             self.isWatchWorkoutActive = isActive
+            self.isWatchWorkoutPaused = isPaused
             
             // If we were waiting for watch and it started, clear waiting state
-            if isActive && self.isWaitingForWatch {
+            if isActive && !isPaused && self.isWaitingForWatch {
                 self.isWaitingForWatch = false
                 self.onWatchWorkoutStarted?()
                 print("✅ [iOS] Watch confirmed workout started!")
             }
             
-            if !isActive {
+            // Handle pause state change
+            if isActive && isPaused && !wasPaused {
+                self.onWatchWorkoutPaused?()
+                print("⏸ [iOS] Watch workout paused")
+            }
+            
+            // Handle resume state change
+            if isActive && !isPaused && wasPaused {
+                self.onWatchWorkoutResumed?()
+                print("▶️ [iOS] Watch workout resumed")
+            }
+            
+            // Handle workout end
+            if !isActive && wasActive {
+                if wasFinished {
+                    // Workout was finished (saved)
+                    self.didWatchWorkoutFinish = true
+                    self.onWatchWorkoutFinished?()
+                    print("🏁 [iOS] Watch workout finished (saved)")
+                } else {
+                    // Workout was discarded (not saved)
+                    self.onWatchWorkoutDiscarded?()
+                    print("🗑 [iOS] Watch workout discarded")
+                }
+                
                 // Reset values when workout ends
                 self.heartRate = 0
                 self.cadence = 0
+                self.isWatchWorkoutPaused = false
             }
         }
         
-        print("🏃 [iOS] Watch workout state: \(isActive ? "STARTED" : "STOPPED")")
+        let stateDescription: String
+        if !isActive {
+            stateDescription = wasFinished ? "FINISHED" : "STOPPED"
+        } else if isPaused {
+            stateDescription = "PAUSED"
+        } else {
+            stateDescription = "ACTIVE"
+        }
+        print("🏃 [iOS] Watch workout state: \(stateDescription)")
     }
     
     // MARK: - Workout Request Handling (Bidirectional Sync)

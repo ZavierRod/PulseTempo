@@ -85,8 +85,11 @@ class PhoneConnectivityManager: NSObject, ObservableObject {
     }
     
     /// Send workout state change to iPhone
-    /// - Parameter isActive: Whether workout is currently active
-    func sendWorkoutState(isActive: Bool) {
+    /// - Parameters:
+    ///   - isActive: Whether workout is currently active
+    ///   - isPaused: Whether workout is currently paused (default: false)
+    ///   - wasFinished: Whether workout was finished/saved (vs discarded) - only relevant when isActive is false
+    func sendWorkoutState(isActive: Bool, isPaused: Bool = false, wasFinished: Bool = false) {
         guard let session = session, session.isReachable else {
             print("⚠️ [Watch] iPhone not reachable, cannot send workout state")
             return
@@ -95,6 +98,8 @@ class PhoneConnectivityManager: NSObject, ObservableObject {
         let message: [String: Any] = [
             "type": "workoutState",
             "isActive": isActive,
+            "isPaused": isPaused,
+            "wasFinished": wasFinished,
             "timestamp": Date().timeIntervalSince1970
         ]
         
@@ -102,7 +107,35 @@ class PhoneConnectivityManager: NSObject, ObservableObject {
             print("❌ [Watch] Failed to send workout state: \(error.localizedDescription)")
         }
         
-        print("📤 [Watch] Sent workout state: \(isActive ? "STARTED" : "STOPPED")")
+        let stateDescription: String
+        if !isActive {
+            stateDescription = wasFinished ? "FINISHED" : "DISCARDED"
+        } else if isPaused {
+            stateDescription = "PAUSED"
+        } else {
+            stateDescription = "ACTIVE"
+        }
+        print("📤 [Watch] Sent workout state: \(stateDescription)")
+    }
+    
+    /// Send dismiss summary command to iPhone
+    func sendDismissSummaryCommand() {
+        guard let session = session, session.isReachable else {
+            print("⚠️ [Watch] iPhone not reachable, cannot send dismiss summary")
+            return
+        }
+        
+        let message: [String: Any] = [
+            "type": "command",
+            "action": "dismissSummary",
+            "timestamp": Date().timeIntervalSince1970
+        ]
+        
+        session.sendMessage(message, replyHandler: nil) { error in
+            print("❌ [Watch] Failed to send dismiss summary: \(error.localizedDescription)")
+        }
+        
+        print("📤 [Watch] Sent dismiss summary command to iPhone")
     }
     
     // MARK: - Workout Request (Bidirectional Sync)
@@ -302,10 +335,8 @@ extension PhoneConnectivityManager: WCSessionDelegate {
     /// Handle commands from iPhone
     private func handleCommand(_ action: String) {
         print("🎮 [Watch] Received command: \(action)")
-        // Commands like "startWorkout" or "stopWorkout" could be handled here
-        // For now, workout is controlled from watch UI
         
-        // Post notification so WorkoutManager can respond if needed
+        // Post notification so WorkoutManager can respond
         NotificationCenter.default.post(
             name: Notification.Name("PhoneCommand"),
             object: nil,

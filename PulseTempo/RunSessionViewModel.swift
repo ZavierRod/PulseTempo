@@ -51,6 +51,15 @@ final class RunSessionViewModel: ObservableObject {
     @Published var sessionState: RunSessionState = .notStarted  // Current run state
     @Published var elapsedTime: TimeInterval = 0                // Time since run started (seconds)
     
+    /// Whether to show the workout summary (after finish)
+    @Published var showingSummary: Bool = false
+    
+    /// Whether the entire view should be dismissed (to return to home)
+    @Published var shouldDismissEntireView: Bool = false
+    
+    /// Whether the workout was finished from the watch (to trigger summary on phone)
+    @Published var watchDidFinishWorkout: Bool = false
+    
     // RUN METRICS
     @Published var averageHeartRate: Int = 0     // Average HR during run
     @Published var maxHeartRate: Int = 0         // Maximum HR during run
@@ -58,6 +67,9 @@ final class RunSessionViewModel: ObservableObject {
     
     // ERROR HANDLING
     @Published var errorMessage: String?         // User-friendly error message
+    
+    // WATCH CONNECTIVITY
+    private let watchConnectivityManager = WatchConnectivityManager.shared
     
     // ═══════════════════════════════════════════════════════════
     // REGULAR PROPERTIES
@@ -222,6 +234,74 @@ final class RunSessionViewModel: ObservableObject {
                 self?.handleTrackUpdate(updatedTrack)
             }
             .store(in: &cancellables)
+        
+        // OBSERVE WATCH WORKOUT STATE CHANGES
+        setupWatchObservers()
+    }
+    
+    /// Set up observers for watch workout state changes
+    private func setupWatchObservers() {
+        // Watch paused workout
+        watchConnectivityManager.onWatchWorkoutPaused = { [weak self] in
+            guard let self = self else { return }
+            Task { @MainActor in
+                if self.sessionState == .active {
+                    self.pauseRun(sendToWatch: false)  // Don't send back to watch
+                    print("⏸ [iOS] Synced pause from watch")
+                }
+            }
+        }
+        
+        // Watch resumed workout
+        watchConnectivityManager.onWatchWorkoutResumed = { [weak self] in
+            guard let self = self else { return }
+            Task { @MainActor in
+                if self.sessionState == .paused {
+                    self.resumeRun(sendToWatch: false)  // Don't send back to watch
+                    print("▶️ [iOS] Synced resume from watch")
+                }
+            }
+        }
+        
+        // Watch finished workout (saved)
+        watchConnectivityManager.onWatchWorkoutFinished = { [weak self] in
+            guard let self = self else { return }
+            Task { @MainActor in
+                // Only finish if not already showing summary (prevents double-finish)
+                guard !self.showingSummary else {
+                    print("ℹ️ [iOS] Already showing summary, ignoring watch finish")
+                    return
+                }
+                self.watchDidFinishWorkout = true
+                self.finishRun(sendToWatch: false)  // Don't send back to watch
+                print("🏁 [iOS] Synced finish from watch")
+            }
+        }
+        
+        // Watch discarded workout (not saved)
+        watchConnectivityManager.onWatchWorkoutDiscarded = { [weak self] in
+            guard let self = self else { return }
+            Task { @MainActor in
+                // Only discard if not already completed (prevents double-discard)
+                guard self.sessionState != .completed else {
+                    print("ℹ️ [iOS] Already completed, ignoring watch discard")
+                    return
+                }
+                self.discardRun(sendToWatch: false)  // Don't send back to watch
+                print("🗑 [iOS] Synced discard from watch")
+            }
+        }
+        
+        // Watch dismissed summary and went home
+        watchConnectivityManager.onWatchSummaryDismissed = { [weak self] in
+            guard let self = self else { return }
+            Task { @MainActor in
+                if self.showingSummary {
+                    self.dismissSummary(sendToWatch: false)  // Don't send back to watch
+                    print("🏠 [iOS] Synced summary dismiss from watch")
+                }
+            }
+        }
     }
     
     // PRIVATE METHOD: createFakeTracks
@@ -355,16 +435,23 @@ final class RunSessionViewModel: ObservableObject {
     
     /// Pause the run session
     /// Pauses music but continues heart rate monitoring
-    func pauseRun() {
+    /// - Parameter sendToWatch: Whether to send pause command to watch (default: true)
+    func pauseRun(sendToWatch: Bool = true) {
         sessionState = .paused
         isPlaying = false  // Update UI immediately
         musicService.pause()
         runTimer?.invalidate()
+        
+        // Send to watch if requested (avoid loop when receiving from watch)
+        if sendToWatch {
+            watchConnectivityManager.sendPauseWorkoutCommand()
+        }
     }
     
     /// Resume the run session
     /// Resumes music playback
-    func resumeRun() {
+    /// - Parameter sendToWatch: Whether to send resume command to watch (default: true)
+    func resumeRun(sendToWatch: Bool = true) {
         sessionState = .active
         isPlaying = true  // Update UI immediately
         musicService.resume()
@@ -373,12 +460,18 @@ final class RunSessionViewModel: ObservableObject {
         runTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.updateElapsedTime()
         }
+        
+        // Send to watch if requested (avoid loop when receiving from watch)
+        if sendToWatch {
+            watchConnectivityManager.sendResumeWorkoutCommand()
+        }
     }
     
-    /// Stop the run session
-    /// Stops both heart rate monitoring and music playback
-    func stopRun() {
+    /// Finish the run session - saves workout and shows summary
+    /// - Parameter sendToWatch: Whether to send finish command to watch (default: true)
+    func finishRun(sendToWatch: Bool = true) {
         sessionState = .completed
+        showingSummary = true
         
         // Stop services
         heartRateService.stopMonitoring()
@@ -390,6 +483,65 @@ final class RunSessionViewModel: ObservableObject {
         
         // Calculate final metrics
         calculateFinalMetrics()
+        
+        // Send to watch if requested (avoid loop when receiving from watch)
+        if sendToWatch {
+            watchConnectivityManager.sendFinishWorkoutCommand()
+        }
+        
+        print("🏁 [iOS] Workout finished - showing summary")
+    }
+    
+    /// Discard the run session - doesn't save, just stops
+    /// - Parameter sendToWatch: Whether to send discard command to watch (default: true)
+    func discardRun(sendToWatch: Bool = true) {
+        sessionState = .completed
+        showingSummary = false  // Don't show summary when discarding
+        
+        // Stop services
+        heartRateService.stopMonitoring()
+        musicService.stop()
+        
+        // Stop timer
+        runTimer?.invalidate()
+        runTimer = nil
+        
+        // Send to watch if requested (avoid loop when receiving from watch)
+        if sendToWatch {
+            watchConnectivityManager.sendDiscardWorkoutCommand()
+        }
+        
+        print("🗑 [iOS] Workout discarded")
+    }
+    
+    /// Stop the run session (legacy - now calls discardRun)
+    /// Stops both heart rate monitoring and music playback
+    func stopRun() {
+        discardRun(sendToWatch: false)  // Don't send to watch since this is called on view disappear
+    }
+    
+    /// Dismiss the summary screen and return to home
+    /// - Parameter sendToWatch: Whether to send dismiss command to watch (default: true)
+    func dismissSummary(sendToWatch: Bool = true) {
+        showingSummary = false
+        sessionState = .notStarted
+        
+        // Signal that the entire view should be dismissed to return to home
+        shouldDismissEntireView = true
+        
+        // Reset metrics for next workout
+        averageHeartRate = 0
+        maxHeartRate = 0
+        elapsedTime = 0
+        tracksPlayed = []
+        watchDidFinishWorkout = false
+        
+        // Send to watch if requested
+        if sendToWatch {
+            watchConnectivityManager.sendDismissSummaryCommand()
+        }
+        
+        print("🏠 [iOS] Summary dismissed")
     }
     
     /// Toggle play/pause state

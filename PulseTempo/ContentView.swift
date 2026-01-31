@@ -441,7 +441,7 @@ struct ActiveRunView: View {
                     
                     // FINISH WORKOUT BUTTON (right side)
                     Button(action: {
-                        // TODO: Add finish workout functionality
+                        runSessionVM.finishRun()
                     }) {
                         HStack(spacing: 4) {
                             Text("Finish")
@@ -449,7 +449,7 @@ struct ActiveRunView: View {
                             Image(systemName: "flag.checkered")
                                 .font(.system(size: 16, weight: .semibold))
                         }
-                        .foregroundColor(.red)
+                        .foregroundColor(.green)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
                         .background(
@@ -485,7 +485,10 @@ struct ActiveRunView: View {
         // Python analogy:
         // Like __exit__ in a context manager or a cleanup/teardown method
         .onDisappear {
-            runSessionVM.stopRun()  // Clean up when leaving
+            // Only clean up if we're not showing the summary (view disappears during summary transition)
+            if !runSessionVM.showingSummary {
+                runSessionVM.stopRun()  // Clean up when leaving
+            }
             stopHeartBeatTimer()    // Clean up timer
         }
         // ═══════════════════════════════════════════════════════════
@@ -497,6 +500,174 @@ struct ActiveRunView: View {
             // Restart the timer with the new heart rate interval
             startHeartBeatTimer(for: newValue)
         }
+        // ═══════════════════════════════════════════════════════════
+        // WORKOUT SUMMARY OVERLAY
+        // ═══════════════════════════════════════════════════════════
+        .fullScreenCover(isPresented: $runSessionVM.showingSummary) {
+            WorkoutSummaryView(
+                elapsedTime: runSessionVM.elapsedTime,
+                averageHeartRate: runSessionVM.averageHeartRate,
+                maxHeartRate: runSessionVM.maxHeartRate,
+                tracksPlayed: runSessionVM.tracksPlayed.count,
+                onDismiss: {
+                    runSessionVM.dismissSummary()  // This sends to watch
+                    dismiss()
+                }
+            )
+        }
+        // ═══════════════════════════════════════════════════════════
+        // WATCH-TRIGGERED DISMISSAL
+        // When watch dismisses summary, this will navigate back to home
+        // ═══════════════════════════════════════════════════════════
+        .onChange(of: runSessionVM.shouldDismissEntireView) { shouldDismiss in
+            if shouldDismiss {
+                runSessionVM.shouldDismissEntireView = false  // Reset for next time
+                dismiss()
+            }
+        }
     }
     
+}
+
+// MARK: - Workout Summary View
+
+/// Shows workout statistics after finishing
+struct WorkoutSummaryView: View {
+    let elapsedTime: TimeInterval
+    let averageHeartRate: Int
+    let maxHeartRate: Int
+    let tracksPlayed: Int
+    let onDismiss: () -> Void
+    
+    var body: some View {
+        ZStack {
+            // Background gradient
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    Color(red: 0.95, green: 0.97, blue: 1.0),
+                    Color(red: 0.90, green: 0.95, blue: 1.0)
+                ]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+            
+            VStack(spacing: 24) {
+                // Header
+                VStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 60))
+                        .foregroundColor(.green)
+                    
+                    Text("Workout Complete!")
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .foregroundColor(.primary)
+                }
+                .padding(.top, 60)
+                
+                // Stats Card
+                VStack(spacing: 20) {
+                    // Duration
+                    StatRow(
+                        icon: "clock.fill",
+                        iconColor: .blue,
+                        label: "Duration",
+                        value: formatDuration(elapsedTime)
+                    )
+                    
+                    Divider()
+                    
+                    // Average Heart Rate
+                    StatRow(
+                        icon: "heart.fill",
+                        iconColor: .red,
+                        label: "Avg Heart Rate",
+                        value: "\(averageHeartRate) BPM"
+                    )
+                    
+                    Divider()
+                    
+                    // Max Heart Rate
+                    StatRow(
+                        icon: "heart.fill",
+                        iconColor: .orange,
+                        label: "Max Heart Rate",
+                        value: "\(maxHeartRate) BPM"
+                    )
+                    
+                    Divider()
+                    
+                    // Tracks Played
+                    StatRow(
+                        icon: "music.note.list",
+                        iconColor: .purple,
+                        label: "Tracks Played",
+                        value: "\(tracksPlayed)"
+                    )
+                }
+                .padding(24)
+                .background(
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(Color.white.opacity(0.9))
+                        .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 4)
+                )
+                .padding(.horizontal, 20)
+                
+                Spacer()
+                
+                // Done Button
+                Button(action: onDismiss) {
+                    HStack {
+                        Image(systemName: "house.fill")
+                        Text("Done")
+                            .font(.headline)
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(Color.green)
+                    )
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 40)
+            }
+        }
+    }
+    
+    private func formatDuration(_ seconds: TimeInterval) -> String {
+        let totalSeconds = Int(seconds)
+        let minutes = totalSeconds / 60
+        let secs = totalSeconds % 60
+        return String(format: "%d:%02d", minutes, secs)
+    }
+}
+
+/// A single row in the stats display
+struct StatRow: View {
+    let icon: String
+    let iconColor: Color
+    let label: String
+    let value: String
+    
+    var body: some View {
+        HStack {
+            Image(systemName: icon)
+                .font(.title2)
+                .foregroundColor(iconColor)
+                .frame(width: 32)
+            
+            Text(label)
+                .font(.body)
+                .foregroundColor(.secondary)
+            
+            Spacer()
+            
+            Text(value)
+                .font(.title3)
+                .fontWeight(.semibold)
+                .foregroundColor(.primary)
+        }
+    }
 }

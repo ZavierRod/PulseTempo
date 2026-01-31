@@ -18,7 +18,10 @@ enum WorkoutSyncState {
     case waitingForPhone       // Watch initiated, waiting for phone to confirm
     case pendingPhoneRequest   // Phone requested workout, waiting for user to confirm on watch
     case active                // Workout running
-    case stopping              // Workout ending
+    case paused                // Workout paused (time frozen, HR/cadence still live)
+    case confirmingDiscard     // Showing discard confirmation
+    case showingSummary        // Showing workout summary after finish
+    case stopping              // Workout ending (saving to HealthKit)
 }
 
 /// Manages workout sessions and heart rate monitoring on Apple Watch
@@ -43,6 +46,27 @@ class WorkoutManager: NSObject, ObservableObject {
     
     /// Any error that occurred
     @Published var errorMessage: String?
+    
+    // MARK: - Summary Data (for finish screen)
+    
+    /// Average heart rate during workout
+    @Published var averageHeartRate: Int = 0
+    
+    /// Average cadence during workout
+    @Published var averageCadence: Int = 0
+    
+    // MARK: - Private Tracking for Averages
+    
+    private var heartRateSamples: [Double] = []
+    private var cadenceSamples: [Double] = []
+    
+    // MARK: - Pause Tracking
+    
+    /// Total time paused (to subtract from elapsed time)
+    private var totalPausedTime: TimeInterval = 0
+    
+    /// When the current pause started
+    private var pauseStartTime: Date?
     
     // MARK: - HealthKit Objects
     
@@ -113,7 +137,7 @@ class WorkoutManager: NSObject, ObservableObject {
             self.syncState = .pendingPhoneRequest
         }
         
-        // Listen for phone commands (watch-first flow: phone confirms our request)
+        // Listen for phone commands (workout control)
         phoneCommandObserver = NotificationCenter.default.addObserver(
             forName: Notification.Name("PhoneCommand"),
             object: nil,
@@ -122,10 +146,55 @@ class WorkoutManager: NSObject, ObservableObject {
             guard let self = self else { return }
             guard let action = notification.userInfo?["action"] as? String else { return }
             
-            if action == "startWorkout" && self.syncState == .waitingForPhone {
+            self.handlePhoneCommand(action)
+        }
+    }
+    
+    /// Handle commands received from iPhone
+    private func handlePhoneCommand(_ action: String) {
+        print("📲 [Watch] Handling phone command: \(action)")
+        
+        switch action {
+        case "startWorkout":
+            // Phone confirmed our workout request
+            if syncState == .waitingForPhone {
                 print("✅ [Watch] Phone confirmed - starting workout!")
-                self.startWorkout(triggeredRemotely: true)
+                startWorkout(triggeredRemotely: true)
             }
+            
+        case "pauseWorkout":
+            // Phone requested pause
+            if syncState == .active {
+                pauseWorkout()
+            }
+            
+        case "resumeWorkout":
+            // Phone requested resume
+            if syncState == .paused {
+                resumeWorkout()
+            }
+            
+        case "finishWorkout":
+            // Phone requested finish (save workout)
+            if syncState == .active || syncState == .paused {
+                finishWorkout()
+            }
+            
+        case "discardWorkout", "stopWorkout":
+            // Phone requested discard (don't save)
+            if syncState == .active || syncState == .paused || syncState == .confirmingDiscard {
+                discardWorkout()
+            }
+            
+        case "dismissSummary":
+            // Phone dismissed summary
+            if syncState == .showingSummary {
+                dismissSummary(sendToPhone: false)  // Don't send back to phone
+                print("🏠 [Watch] Synced summary dismiss from phone")
+            }
+            
+        default:
+            print("⚠️ [Watch] Unknown phone command: \(action)")
         }
     }
     
@@ -281,38 +350,193 @@ class WorkoutManager: NSObject, ObservableObject {
         }
     }
     
-    /// Stop the workout session
-    func stopWorkout() {
-        guard let session = workoutSession else { return }
+    /// Pause the workout session
+    /// Time freezes but HR/cadence continue to update
+    func pauseWorkout() {
+        guard syncState == .active else { return }
         
-        // Stop the timer
+        // Pause the HK session
+        workoutSession?.pause()
+        
+        // Record when pause started
+        pauseStartTime = Date()
+        
+        // Stop the timer (time frozen)
         stopTimer()
         
-        // End the session
+        syncState = .paused
+        phoneConnectivityManager?.sendWorkoutState(isActive: true, isPaused: true)
+        print("⏸ [Watch] Workout paused")
+    }
+    
+    /// Resume the workout session
+    func resumeWorkout() {
+        guard syncState == .paused else { return }
+        
+        // Calculate how long we were paused and add to total
+        if let pauseStart = pauseStartTime {
+            totalPausedTime += Date().timeIntervalSince(pauseStart)
+            pauseStartTime = nil
+        }
+        
+        // Resume the HK session
+        workoutSession?.resume()
+        
+        // Restart the timer
+        startTimer()
+        
+        syncState = .active
+        phoneConnectivityManager?.sendWorkoutState(isActive: true, isPaused: false)
+        print("▶️ [Watch] Workout resumed")
+    }
+    
+    /// Show discard confirmation
+    func showDiscardConfirmation() {
+        // If active, pause first
+        if syncState == .active {
+            workoutSession?.pause()
+            stopTimer()
+            if pauseStartTime == nil {
+                pauseStartTime = Date()
+            }
+        }
+        syncState = .confirmingDiscard
+    }
+    
+    /// Cancel discard and return to paused state
+    func cancelDiscard() {
+        syncState = .paused
+    }
+    
+    /// Finish the workout - save to HealthKit and show summary
+    func finishWorkout() {
+        guard let session = workoutSession else { return }
+        
+        // Stop the timer if still running
+        stopTimer()
+        
+        // Calculate averages for summary
+        calculateAverages()
+        
+        // End the HK session
         session.end()
         
         syncState = .stopping
         
-        // End data collection
-        workoutBuilder?.endCollection(withEnd: Date()) { [weak self] success, error in
+        // Capture workoutBuilder before async to avoid race condition
+        guard let builder = workoutBuilder else {
+            // No builder, just show summary
             DispatchQueue.main.async {
-                self?.isWorkoutActive = false
-                self?.syncState = .idle
-                self?.phoneConnectivityManager?.sendWorkoutState(isActive: false)
-                print("✅ [Watch] Workout stopped")
+                self.isWorkoutActive = false
+                self.syncState = .showingSummary
+                self.phoneConnectivityManager?.sendWorkoutState(isActive: false, isPaused: false)
             }
-            
-            // Optionally save the workout
-            self?.workoutBuilder?.finishWorkout { workout, error in
-                if let workout = workout {
-                    print("✅ [Watch] Workout saved: \(workout)")
+            workoutSession = nil
+            return
+        }
+        
+        // End data collection and save
+        builder.endCollection(withEnd: Date()) { [weak self] success, error in
+            // Save the workout to HealthKit
+            builder.finishWorkout { workout, error in
+                DispatchQueue.main.async {
+                    self?.isWorkoutActive = false
+                    self?.syncState = .showingSummary
+                    // Send wasFinished: true to indicate workout was saved
+                    self?.phoneConnectivityManager?.sendWorkoutState(isActive: false, isPaused: false, wasFinished: true)
+                    
+                    // Clear session references AFTER transitioning state
+                    self?.workoutSession = nil
+                    self?.workoutBuilder = nil
+                    
+                    if let workout = workout {
+                        print("✅ [Watch] Workout finished and saved: \(workout)")
+                    } else if let error = error {
+                        print("⚠️ [Watch] Workout finished but save failed: \(error.localizedDescription)")
+                    }
                 }
             }
         }
+    }
+    
+    /// Discard the workout - end without saving to HealthKit
+    func discardWorkout() {
+        guard let session = workoutSession else {
+            // No session, just reset state
+            resetToIdle()
+            return
+        }
         
-        // Clear references
-        workoutSession = nil
-        workoutBuilder = nil
+        // Stop the timer
+        stopTimer()
+        
+        // End the session without saving
+        session.end()
+        
+        syncState = .stopping
+        
+        // Capture workoutBuilder before async to avoid race condition
+        guard let builder = workoutBuilder else {
+            // No builder, just reset
+            resetToIdle()
+            phoneConnectivityManager?.sendWorkoutState(isActive: false, isPaused: false)
+            workoutSession = nil
+            return
+        }
+        
+        // End data collection but DON'T call finishWorkout (which saves)
+        builder.endCollection(withEnd: Date()) { [weak self] success, error in
+            DispatchQueue.main.async {
+                self?.resetToIdle()
+                self?.phoneConnectivityManager?.sendWorkoutState(isActive: false, isPaused: false)
+                
+                // Clear references AFTER resetting state
+                self?.workoutSession = nil
+                self?.workoutBuilder = nil
+                
+                print("🗑 [Watch] Workout discarded (not saved)")
+            }
+        }
+    }
+    
+    /// Reset to idle state and clear all data
+    private func resetToIdle() {
+        isWorkoutActive = false
+        syncState = .idle
+        elapsedSeconds = 0
+        heartRate = 0
+        cadence = 0
+        averageHeartRate = 0
+        averageCadence = 0
+        heartRateSamples.removeAll()
+        cadenceSamples.removeAll()
+        totalPausedTime = 0
+        pauseStartTime = nil
+        workoutStartDate = nil
+    }
+    
+    /// Return to idle from summary screen
+    /// Dismiss summary and return to home
+    /// - Parameter sendToPhone: Whether to send dismiss command to phone (default: true)
+    func dismissSummary(sendToPhone: Bool = true) {
+        resetToIdle()
+        
+        // Send to phone if requested
+        if sendToPhone {
+            phoneConnectivityManager?.sendDismissSummaryCommand()
+        }
+        
+        print("🏠 [Watch] Summary dismissed")
+    }
+    
+    /// Calculate average heart rate and cadence for summary
+    private func calculateAverages() {
+        if !heartRateSamples.isEmpty {
+            averageHeartRate = Int(heartRateSamples.reduce(0, +) / Double(heartRateSamples.count))
+        }
+        if !cadenceSamples.isEmpty {
+            averageCadence = Int(cadenceSamples.reduce(0, +) / Double(cadenceSamples.count))
+        }
     }
     
     // MARK: - Timer
@@ -321,7 +545,9 @@ class WorkoutManager: NSObject, ObservableObject {
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             guard let self = self, let startDate = self.workoutStartDate else { return }
             DispatchQueue.main.async {
-                self.elapsedSeconds = Int(Date().timeIntervalSince(startDate))
+                // Subtract total paused time from elapsed time
+                let totalElapsed = Date().timeIntervalSince(startDate)
+                self.elapsedSeconds = Int(totalElapsed - self.totalPausedTime)
             }
         }
     }
@@ -389,9 +615,15 @@ extension WorkoutManager: HKLiveWorkoutBuilderDelegate {
                 if let value = statistics.mostRecentQuantity()?.doubleValue(for: heartRateUnit) {
                     DispatchQueue.main.async {
                         self.heartRate = value
+                        
+                        // Record sample for average calculation (only when active, not paused)
+                        if self.syncState == .active {
+                            self.heartRateSamples.append(value)
+                        }
+                        
                         print("💓 [Watch] Heart rate: \(Int(value)) BPM")
                         
-                        // Send to iPhone (will be implemented in Step 3)
+                        // Send to iPhone
                         self.phoneConnectivityManager?.sendHeartRate(value, cadence: self.cadence)
                     }
                 }
@@ -425,6 +657,11 @@ extension WorkoutManager: HKLiveWorkoutBuilderDelegate {
                                 } else {
                                     // Weighted average: 70% new, 30% old
                                     self.cadence = (instantCadence * 0.7) + (self.cadence * 0.3)
+                                }
+                                
+                                // Record sample for average calculation (only when active, not paused)
+                                if self.syncState == .active && self.cadence > 0 {
+                                    self.cadenceSamples.append(self.cadence)
                                 }
                             }
                         }
