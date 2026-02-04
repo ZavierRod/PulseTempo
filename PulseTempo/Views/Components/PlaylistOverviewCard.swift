@@ -28,21 +28,21 @@ struct PlaylistOverviewCard: View {
                         .frame(width: 56, height: 56)
                     
                     Image(systemName: "music.note.list")
-                        .font(.system(size: 24))
+                        .font(.bebasNeue(size: 24))
                         .foregroundColor(.white)
                 }
                 
                 // Playlist info
                 VStack(alignment: .leading, spacing: 4) {
                     Text(playlist.name)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.bebasNeueSubheadline)
                         .foregroundColor(.primary)
                         .lineLimit(1)
                     
                     // Only show track count if available (> 0)
                     if playlist.trackCount > 0 {
                         Text("\(playlist.trackCount) \(playlist.trackCount == 1 ? "song" : "songs")")
-                            .font(.system(size: 14))
+                            .font(.bebasNeueCaption)
                             .foregroundColor(.secondary)
                     }
                 }
@@ -51,7 +51,7 @@ struct PlaylistOverviewCard: View {
                 
                 // Chevron indicator
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.bebasNeueCaption)
                     .foregroundColor(.secondary)
             }
             .padding(12)

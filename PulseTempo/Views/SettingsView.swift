@@ -33,11 +33,11 @@ struct SettingsView: View {
                         
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Heart Rate Device")
-                                .font(.subheadline)
+                                .font(.bebasNeueSubheadline)
                                 .foregroundColor(.secondary)
                             
                             Text(deviceManager.selectedDevice.rawValue)
-                                .font(.body)
+                                .font(.bebasNeueBody)
                         }
                         
                         Spacer()
@@ -55,7 +55,7 @@ struct SettingsView: View {
                             .foregroundColor(deviceManager.isDeviceConfigured() ? .green : .orange)
                         
                         Text(deviceManager.getDeviceStatusMessage())
-                            .font(.caption)
+                            .font(.bebasNeueCaption)
                             .foregroundColor(.secondary)
                     }
                     
@@ -78,10 +78,10 @@ struct SettingsView: View {
                                 ForEach(Array(deviceManager.selectedDevice.setupInstructions.enumerated()), id: \.offset){ index, instruction in
                                     HStack(alignment: .top, spacing: 8) {
                                         Text("\(index + 1).")
-                                            .font(.caption)
+                                            .font(.bebasNeueCaption)
                                             .foregroundColor(.secondary)
                                         Text(instruction)
-                                            .font(.caption)
+                                            .font(.bebasNeueCaption)
                                             .foregroundColor(.secondary)
                                     }
                                 }
@@ -198,11 +198,11 @@ private struct DevicePickerSheet: View {
                             
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(device.rawValue)
-                                    .font(.body)
+                                    .font(.bebasNeueBody)
                                     .foregroundColor(.primary)
                                 
                                 Text(device.description)
-                                    .font(.caption)
+                                    .font(.bebasNeueCaption)
                                     .foregroundColor(.secondary)
                             }
                             

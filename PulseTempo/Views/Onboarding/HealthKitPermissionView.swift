@@ -43,76 +43,113 @@ struct HealthKitPermissionView: View {
     @State private var isRequesting = false
     @State private var errorMessage: String?
 
+    // MARK: - State for Animation
+    
+    @State private var animateGradient = false
+    
     // MARK: - Body
 
     var body: some View {
-        VStack(spacing: 24) {
-            header
-
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Connect to Apple Health")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-
-                Text("PulseTempo adapts every playlist to your workout intensity. To do that, we need permission to read your heart-rate data from Apple Health. We only read; we never write or store your health data outside your device.")
-                    .font(.system(size: 16))
-                    .foregroundColor(.secondary)
+        ZStack {
+            // Animated gradient background (matching WelcomeView)
+            LinearGradient(
+                colors: [
+                    Color(red: 0.1, green: 0.1, blue: 0.2),
+                    Color(red: 0.2, green: 0.1, blue: 0.3),
+                    Color(red: 0.1, green: 0.2, blue: 0.3)
+                ],
+                startPoint: animateGradient ? .topLeading : .bottomLeading,
+                endPoint: animateGradient ? .bottomTrailing : .topTrailing
+            )
+            .ignoresSafeArea()
+            .onAppear {
+                withAnimation(.easeInOut(duration: 3.0).repeatForever(autoreverses: true)) {
+                    animateGradient = true
+                }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            
+            VStack(spacing: 24) {
+                header
 
-            statusView
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Connect to Apple Health")
+                        .font(.bebasNeueMedium)
+                        .foregroundColor(.white)
 
-            Spacer()
-
-            if let errorMessage {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Something went wrong")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.red)
-                    Text(errorMessage)
-                        .font(.system(size: 14))
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    Text("PulseTempo adapts every playlist to your workout intensity. To do that, we need permission to read your heart-rate data from Apple Health. We only read; we never write or store your health data outside your device.")
+                        .font(.bebasNeueSubheadline)
+                        .foregroundColor(.white.opacity(0.7))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-            }
 
-            VStack(spacing: 12) {
-                Button(action: requestAuthorization) {
-                    HStack {
-                        if isRequesting {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle())
+                statusView
+
+                Spacer()
+
+                if let errorMessage {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Something went wrong")
+                            .font(.bebasNeueSubheadline)
+                            .foregroundColor(.red)
+                        Text(errorMessage)
+                            .font(.bebasNeueCaption)
+                            .foregroundColor(.white.opacity(0.7))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                VStack(spacing: 12) {
+                    Button(action: requestAuthorization) {
+                        HStack {
+                            if isRequesting {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            }
+
+                            Text(primaryButtonTitle)
+                                .font(.bebasNeueBody)
                         }
-
-                        Text(primaryButtonTitle)
-                            .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 56)
+                        .background(
+                            LinearGradient(
+                                colors: isRequesting ? [Color.gray] : [Color.pink, Color.purple],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .cornerRadius(16)
+                        .shadow(color: Color.pink.opacity(0.4), radius: 15, x: 0, y: 8)
                     }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 56)
-                    .background(isRequesting ? Color.gray : Color.accentColor)
-                    .cornerRadius(16)
-                }
-                .disabled(isRequesting)
+                    .disabled(isRequesting)
 
-                if shouldShowOpenSettings {
-                    Button(action: openSettings) {
-                        Text("Open Settings")
-                            .font(.system(size: 16, weight: .semibold))
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 48)
+                    if shouldShowOpenSettings {
+                        Button(action: openSettings) {
+                            Text("Open Settings")
+                                .font(.bebasNeueSubheadline)
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 48)
+                                .background(Color.white.opacity(0.1))
+                                .cornerRadius(12)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                                )
+                        }
                     }
-                    .buttonStyle(.bordered)
-                }
 
-                if let onSkip {
-                    Button("Skip for now", action: onSkip)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.secondary)
+                    if let onSkip {
+                        Button("Skip for now", action: onSkip)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.white.opacity(0.6))
+                    }
                 }
             }
+            .padding(24)
         }
-        .padding(24)
         .onAppear(perform: refreshAuthorizationStatus)
     }
 
@@ -123,20 +160,33 @@ struct HealthKitPermissionView: View {
             if let onBack {
                 Button(action: onBack) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.bebasNeueSubheadline)
+                        .foregroundColor(.white)
                 }
             }
 
             Spacer()
 
-            Image(systemName: "heart.fill")
-                .font(.system(size: 28))
-                .foregroundColor(.pink)
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.pink, Color.purple],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 70, height: 70)
+                    .shadow(color: Color.pink.opacity(0.5), radius: 15, x: 0, y: 8)
+                
+                Image(systemName: "heart.fill")
+                    .font(.system(size: 32))
+                    .foregroundColor(.white)
+            }
 
             Spacer()
 
             if onBack != nil {
-                // Keep layout balanced
                 Color.clear
                     .frame(width: 44, height: 44)
             }
@@ -146,7 +196,8 @@ struct HealthKitPermissionView: View {
     private var statusView: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Authorization Status")
-                .font(.system(size: 16, weight: .semibold))
+                .font(.bebasNeueSubheadline)
+                .foregroundColor(.white)
 
             HStack(spacing: 12) {
                 Circle()
@@ -155,14 +206,18 @@ struct HealthKitPermissionView: View {
 
                 Text(statusDescription)
                     .font(.system(size: 15))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.white.opacity(0.7))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.secondarySystemBackground))
+                .fill(Color.white.opacity(0.1))
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                )
         )
     }
 

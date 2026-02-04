@@ -24,6 +24,7 @@ struct OnboardingCoordinator: View {
     private let musicKitManager: MusicKitManager
 
     @Environment(\.scenePhase) private var scenePhase
+    @StateObject private var authService = AuthService.shared
 
     init(
         healthKitManager: HealthKitManager = .shared,
@@ -213,9 +214,14 @@ struct OnboardingCoordinator: View {
         }
     }
 
-    /// Advances from the welcome screen to authentication.
+    /// Advances from the welcome screen to authentication (or skips if already authenticated).
     private func advanceFromWelcome() {
-        currentStep = .authentication
+        if authService.isAuthenticated {
+            // User already has valid tokens, skip auth
+            currentStep = .wearableSelection
+        } else {
+            currentStep = .authentication
+        }
     }
     
     /// Advances from authentication to wearable selection.

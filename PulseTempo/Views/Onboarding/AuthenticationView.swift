@@ -38,6 +38,7 @@ struct AuthenticationView: View {
     @State private var localError: String?
     
     @FocusState private var focusedField: Field?
+    @State private var animateGradient = false
     
     private enum Field {
         case email, password, confirmPassword, firstName, lastName
@@ -46,30 +47,43 @@ struct AuthenticationView: View {
     // MARK: - Body
     
     var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                header
-                
-                titleSection
-                
-                formFields
-                
-                if let error = authService.errorMessage ?? localError {
-                    errorView(message: error)
+        ZStack {
+            // Animated gradient background (matching WelcomeView)
+            LinearGradient(
+                colors: [
+                    Color(red: 0.1, green: 0.1, blue: 0.2),
+                    Color(red: 0.2, green: 0.1, blue: 0.3),
+                    Color(red: 0.1, green: 0.2, blue: 0.3)
+                ],
+                startPoint: animateGradient ? .topLeading : .bottomLeading,
+                endPoint: animateGradient ? .bottomTrailing : .topTrailing
+            )
+            .ignoresSafeArea()
+            .onAppear {
+                withAnimation(.easeInOut(duration: 3.0).repeatForever(autoreverses: true)) {
+                    animateGradient = true
                 }
-                
-                actionButtons
-                
-                modeToggle
-                
-                Spacer(minLength: 40)
             }
-            .padding(24)
-        }
-        .background(Color(.systemBackground))
-        .onChange(of: authService.isAuthenticated) { isAuthenticated in
-            if isAuthenticated {
-                onAuthenticated()
+            
+            ScrollView {
+                VStack(spacing: 24) {
+                    header
+                    
+                    titleSection
+                    
+                    formFields
+                    
+                    if let error = authService.errorMessage ?? localError {
+                        errorView(message: error)
+                    }
+                    
+                    actionButtons
+                    
+                    modeToggle
+                    
+                    Spacer(minLength: 40)
+                }
+                .padding(24)
             }
         }
     }
@@ -81,20 +95,33 @@ struct AuthenticationView: View {
             if let onBack {
                 Button(action: onBack) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.bebasNeueSubheadline)
+                        .foregroundColor(.white)
                 }
             }
             
             Spacer()
             
-            Image(systemName: "person.circle.fill")
-                .font(.system(size: 28))
-                .foregroundColor(.accentColor)
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.pink, Color.purple],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 70, height: 70)
+                    .shadow(color: Color.pink.opacity(0.5), radius: 15, x: 0, y: 8)
+                
+                Image(systemName: "person.fill")
+                    .font(.system(size: 30))
+                    .foregroundColor(.white)
+            }
             
             Spacer()
             
             if onBack != nil {
-                // Keep layout balanced
                 Color.clear
                     .frame(width: 44, height: 44)
             }
@@ -104,13 +131,14 @@ struct AuthenticationView: View {
     private var titleSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(mode == .signUp ? "Create Account" : "Welcome Back")
-                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .font(.bebasNeueMedium)
+                .foregroundColor(.white)
             
             Text(mode == .signUp
                  ? "Sign up to save your workout history and sync across devices."
                  : "Log in to access your workout history.")
-                .font(.system(size: 16))
-                .foregroundColor(.secondary)
+                .font(.bebasNeueSubheadline)
+                .foregroundColor(.white.opacity(0.7))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -179,7 +207,7 @@ struct AuthenticationView: View {
                 .foregroundColor(.red)
             
             Text(message)
-                .font(.system(size: 14))
+                .font(.bebasNeueCaption)
                 .foregroundColor(.red)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -201,7 +229,7 @@ struct AuthenticationView: View {
                     }
                     
                     Text(mode == .signUp ? "Sign Up" : "Log In")
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.bebasNeueBody)
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
@@ -228,13 +256,13 @@ struct AuthenticationView: View {
     private var modeToggle: some View {
         HStack(spacing: 4) {
             Text(mode == .signUp ? "Already have an account?" : "Don't have an account?")
-                .font(.system(size: 14))
-                .foregroundColor(.secondary)
+                .font(.bebasNeueCaption)
+                .foregroundColor(.white.opacity(0.6))
             
             Button(action: toggleMode) {
                 Text(mode == .signUp ? "Log In" : "Sign Up")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.accentColor)
+                    .font(.bebasNeueCaption)
+                    .foregroundColor(.pink)
             }
         }
     }
@@ -284,7 +312,10 @@ struct AuthenticationView: View {
                 } else {
                     try await authService.login(email: email, password: password)
                 }
-                // onAuthenticated will be called via onChange when isAuthenticated becomes true
+                // Call onAuthenticated directly after successful auth
+                await MainActor.run {
+                    onAuthenticated()
+                }
             } catch {
                 // Error is already set in authService.errorMessage
             }
@@ -314,20 +345,25 @@ struct CustomTextField: View {
         HStack(spacing: 12) {
             if let icon {
                 Image(systemName: icon)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.white.opacity(0.5))
                     .frame(width: 20)
             }
             
-            TextField(placeholder, text: $text)
+            TextField(placeholder, text: $text, prompt: Text(placeholder).foregroundColor(.white.opacity(0.4)))
                 .keyboardType(keyboardType)
                 .textContentType(textContentType)
                 .textInputAutocapitalization(autocapitalization)
                 .autocorrectionDisabled()
+                .foregroundColor(.white)
         }
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color(.secondarySystemBackground))
+                .fill(Color.white.opacity(0.1))
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                )
         )
     }
 }
@@ -343,28 +379,34 @@ struct CustomSecureField: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .foregroundColor(.secondary)
+                .foregroundColor(.white.opacity(0.5))
                 .frame(width: 20)
             
             if showPassword {
-                TextField(placeholder, text: $text)
+                TextField(placeholder, text: $text, prompt: Text(placeholder).foregroundColor(.white.opacity(0.4)))
                     .textContentType(.password)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
+                    .foregroundColor(.white)
             } else {
-                SecureField(placeholder, text: $text)
+                SecureField(placeholder, text: $text, prompt: Text(placeholder).foregroundColor(.white.opacity(0.4)))
                     .textContentType(.password)
+                    .foregroundColor(.white)
             }
             
             Button(action: { showPassword.toggle() }) {
                 Image(systemName: showPassword ? "eye.slash" : "eye")
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.white.opacity(0.5))
             }
         }
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color(.secondarySystemBackground))
+                .fill(Color.white.opacity(0.1))
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                )
         )
     }
 }

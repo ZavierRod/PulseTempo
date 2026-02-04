@@ -8,6 +8,7 @@
 // Foundation provides basic data types and utilities
 // Similar to Python's built-in types and standard library
 import Foundation
+import SwiftUI
 
 // DATA MODEL: Track
 // "struct" is like a Python dataclass or Pydantic model
@@ -181,6 +182,50 @@ enum RunSessionState: String {
             return "Paused"
         case .completed:
             return "Completed"
+        }
+    }
+}
+
+// ENUMERATION: HeartRateZone
+// Represents heart rate training zones based on current BPM
+enum HeartRateZone: String, CaseIterable {
+    case rest           // < 100 BPM
+    case warmUp         // 100-120 BPM
+    case fatBurn        // 120-140 BPM
+    case cardio         // 140-160 BPM
+    case peak           // 160-180 BPM
+    case max            // > 180 BPM
+    
+    var name: String {
+        switch self {
+        case .rest: return "Rest"
+        case .warmUp: return "Warm Up"
+        case .fatBurn: return "Fat Burn"
+        case .cardio: return "Cardio"
+        case .peak: return "Peak"
+        case .max: return "Maximum"
+        }
+    }
+    
+    var color: Color {
+        switch self {
+        case .rest: return .gray
+        case .warmUp: return .blue
+        case .fatBurn: return .green
+        case .cardio: return .yellow
+        case .peak: return .orange
+        case .max: return .red
+        }
+    }
+    
+    static func zone(for heartRate: Int) -> HeartRateZone {
+        switch heartRate {
+        case ..<100: return .rest
+        case 100..<120: return .warmUp
+        case 120..<140: return .fatBurn
+        case 140..<160: return .cardio
+        case 160..<180: return .peak
+        default: return .max
         }
     }
 }

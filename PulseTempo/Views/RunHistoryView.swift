@@ -48,14 +48,14 @@ struct RunHistoryView: View {
     private var emptyState: some View {
         VStack(spacing: 16) {
             Image(systemName: "figure.run")
-                .font(.system(size: 60))
+                .font(.bebasNeueExtraLarge)
                 .foregroundColor(.secondary)
             
             Text("No Workouts Yet")
-                .font(.system(size: 22, weight: .semibold))
+                .font(.bebasNeueTitle)
             
             Text("Complete your first workout to see it here.")
-                .font(.system(size: 16))
+                .font(.bebasNeueSubheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
@@ -85,7 +85,7 @@ struct RunHistoryCard: View {
             // Date header
             HStack {
                 Text(workout.formattedDate)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.bebasNeueSubheadline)
                 
                 Spacer()
                 
@@ -143,14 +143,14 @@ struct StatBadge: View {
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 12))
+                .font(.bebasNeueCaptionSmall)
                 .foregroundColor(color)
             
             Text(value)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.bebasNeueCaption)
             
             Text(label)
-                .font(.system(size: 12))
+                .font(.bebasNeueCaptionSmall)
                 .foregroundColor(.secondary)
         }
     }

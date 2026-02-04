@@ -17,5 +17,9 @@
 	<array>
 		<string>_http._tcp</string>
 	</array>
+	<key>UIAppFonts</key>
+	<array>
+		<string>BebasNeue-Regular.ttf</string>
+	</array>
 </dict>
 </plist>

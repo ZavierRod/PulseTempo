@@ -14,13 +14,16 @@ struct HomeView: View {
     // MARK: - Properties
     
     @StateObject private var viewModel = HomeViewModel()
+    @StateObject private var authService = AuthService.shared
     @ObservedObject private var connectivityManager = WatchConnectivityManager.shared
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     
     /// Navigation state
     @State private var showingActiveRun = false
     @State private var showingPlaylistSelection = false
     @State private var selectedPlaylistForViewing: MusicPlaylist?
     @State private var showingRunHistory = false
+    @State private var showingSignOutAlert = false
     
     /// Workout tracks state
     @State private var workoutTracks: [Track] = []
@@ -70,13 +73,26 @@ struct HomeView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {
-                        // TODO: Open settings
-                    }) {
+                    Menu {
+                        Button(role: .destructive, action: {
+                            showingSignOutAlert = true
+                        }) {
+                            Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+                        }
+                    } label: {
                         Image(systemName: "gear")
                             .foregroundColor(.black)
                     }
                 }
+            }
+            .alert("Sign Out", isPresented: $showingSignOutAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Sign Out", role: .destructive) {
+                    authService.logout()
+                    hasCompletedOnboarding = false
+                }
+            } message: {
+                Text("Are you sure you want to sign out?")
             }
             .fullScreenCover(isPresented: $showingActiveRun) {
                 ActiveRunView(tracks: workoutTracks, runMode: selectedRunMode)
@@ -134,7 +150,7 @@ struct HomeView: View {
                     Image(systemName: "applewatch")
                         .foregroundColor(.green)
                     Text("Open Apple Watch to start")
-                        .font(.subheadline)
+                        .font(.bebasNeueSubheadline)
                 }
                 .foregroundColor(.white.opacity(0.8))
                 
@@ -142,7 +158,7 @@ struct HomeView: View {
                     connectivityManager.cancelWaitingForWatch()
                 }) {
                     Text("Cancel")
-                        .font(.headline)
+                        .font(.bebasNeueTitle)
                         .foregroundColor(.white)
                         .padding(.horizontal, 32)
                         .padding(.vertical, 12)
@@ -165,12 +181,12 @@ struct HomeView: View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Ready to Work Out")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .font(.bebasNeueMedium)
                     .foregroundColor(.black)
                 
                 if viewModel.totalTrackCount > 0 {
                     Text("\(viewModel.totalTrackCount) songs ready")
-                        .font(.subheadline)
+                        .font(.bebasNeueSubheadline)
                         .foregroundColor(.gray)
                 }
             }
@@ -336,15 +352,15 @@ struct HomeView: View {
     private var emptyPlaylistsView: some View {
         VStack(spacing: 12) {
             Image(systemName: "music.note.list")
-                .font(.system(size: 40))
+                .font(.bebasNeueLarge)
                 .foregroundColor(.gray.opacity(0.5))
             
             Text("No Playlists Selected")
-                .font(.headline)
+                .font(.bebasNeueTitle)
                 .foregroundColor(.primary)
             
             Text("Add playlists to get started")
-                .font(.subheadline)
+                .font(.bebasNeueSubheadline)
                 .foregroundColor(.secondary)
             
             Button(action: {
@@ -387,7 +403,7 @@ struct HomeView: View {
                 HStack(spacing: 16) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(workout.formattedDate)
-                            .font(.subheadline)
+                            .font(.bebasNeueSubheadline)
                             .foregroundColor(.secondary)
                         
                         HStack(spacing: 12) {
@@ -397,7 +413,7 @@ struct HomeView: View {
                                 Label("\(workout.averageCadence) SPM", systemImage: "figure.run")
                             }
                         }
-                        .font(.system(size: 14))
+                        .font(.bebasNeueCaption)
                         .foregroundColor(.primary)
                     }
                     
@@ -481,7 +497,7 @@ struct InfoPill: View {
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 14))
+                .font(.bebasNeueCaption)
             
             Text(text)
                 .font(.system(size: 14, weight: .medium))
@@ -519,7 +535,7 @@ struct WorkoutModeButton: View {
         Button(action: action) {
             VStack(spacing: 6) {
                 Image(systemName: mode.icon)
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(.bebasNeueTitle)
                 
                 Text(mode.displayName)
                     .font(.system(size: 13, weight: .semibold))

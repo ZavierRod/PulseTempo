@@ -34,7 +34,7 @@ struct ContentView: View {
                 VStack {
                     ProgressView()
                     Text("Saving...")
-                        .font(.caption)
+                        .font(.bebasNeueCaption)
                         .foregroundColor(.secondary)
                 }
             }
@@ -46,11 +46,11 @@ struct ContentView: View {
     private var preWorkoutView: some View {
         VStack(spacing: 8) {
             Image(systemName: "figure.run")
-                .font(.title)
+                .font(.bebasNeueTitle)
                 .foregroundColor(.green)
             
             Text("PulseTempo")
-                .font(.caption)
+                .font(.bebasNeueCaption)
             
             Button("Start") {
                 workoutManager.requestWorkoutStart()
@@ -67,7 +67,7 @@ struct ContentView: View {
                 .scaleEffect(1.2)
             
             Text("Waiting...")
-                .font(.headline)
+                .font(.bebasNeueTitle)
             
             HStack(spacing: 4) {
                 Image(systemName: "iphone")
@@ -104,7 +104,7 @@ struct ContentView: View {
             .font(.title3)
             
             Text("Start Workout?")
-                .font(.headline)
+                .font(.bebasNeueTitle)
             
             Text("iPhone is ready")
                 .font(.caption2)
@@ -174,7 +174,7 @@ struct ContentView: View {
                 Text("\(Int(workoutManager.cadence)) SPM")
                     .foregroundColor(.cyan)
             }
-            .font(.caption)
+            .font(.bebasNeueCaption)
             
             Spacer()
             
@@ -182,7 +182,7 @@ struct ContentView: View {
             HStack {
                 Spacer()
                 Image(systemName: "chevron.left")
-                    .font(.caption)
+                    .font(.bebasNeueCaption)
                     .foregroundColor(.secondary.opacity(0.6))
             }
             .padding(.trailing, 8)
@@ -256,7 +256,7 @@ struct ContentView: View {
     private var discardConfirmationView: some View {
         VStack(spacing: 12) {
             Text("Discard Workout?")
-                .font(.headline)
+                .font(.bebasNeueTitle)
             
             Text("This cannot be undone.")
                 .font(.caption2)
@@ -301,7 +301,7 @@ struct ContentView: View {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundColor(.green)
                 Text("Complete")
-                    .font(.headline)
+                    .font(.bebasNeueTitle)
             }
             
             // Total time
@@ -313,7 +313,7 @@ struct ContentView: View {
                 Image(systemName: "heart.fill")
                     .foregroundColor(.red)
                 Text("\(workoutManager.averageHeartRate) avg BPM")
-                    .font(.caption)
+                    .font(.bebasNeueCaption)
             }
             
             // Average cadence
@@ -321,7 +321,7 @@ struct ContentView: View {
                 Image(systemName: "figure.run")
                     .foregroundColor(.cyan)
                 Text("\(workoutManager.averageCadence) avg SPM")
-                    .font(.caption)
+                    .font(.bebasNeueCaption)
             }
             
             Spacer()

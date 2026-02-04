@@ -808,7 +808,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = SKSR747K3X;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "PulseTempo-Watch-App-Watch-App-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "PulseTempo Watch App";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "PulseTempo needs to read your heart rate to match music to your workout.";
@@ -845,7 +845,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = SKSR747K3X;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "PulseTempo-Watch-App-Watch-App-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "PulseTempo Watch App";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "PulseTempo needs to read your heart rate to match music to your workout.";

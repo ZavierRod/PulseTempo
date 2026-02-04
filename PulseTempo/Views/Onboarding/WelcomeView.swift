@@ -59,11 +59,11 @@ struct WelcomeView: View {
                         .shadow(color: Color.pink.opacity(0.5), radius: 20, x: 0, y: 10)
                     
                     Image(systemName: "heart.fill")
-                        .font(.system(size: 50))
+                        .font(.bebasNeue(size: 50))
                         .foregroundColor(.white)
                     
                     Image(systemName: "music.note")
-                        .font(.system(size: 30))
+                        .font(.bebasNeue(size: 30))
                         .foregroundColor(.white)
                         .offset(x: 25, y: -25)
                 }
@@ -71,13 +71,13 @@ struct WelcomeView: View {
                 
                 // App Name
                 Text("PulseTempo")
-                    .font(.system(size: 48, weight: .bold, design: .rounded))
+                    .font(.bebasNeue(size: 48))
                     .foregroundColor(.white)
                     .padding(.bottom, 12)
                 
                 // Tagline
                 Text("Music That Moves With You")
-                    .font(.system(size: 20, weight: .medium))
+                    .font(.bebasNeue(size: 20))
                     .foregroundColor(.white.opacity(0.8))
                     .padding(.bottom, 60)
                 
@@ -112,9 +112,9 @@ struct WelcomeView: View {
                 Button(action: onGetStarted) {
                     HStack {
                         Text("Get Started")
-                            .font(.system(size: 18, weight: .semibold))
+                            .font(.bebasNeueBody)
                         Image(systemName: "arrow.right")
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.bebasNeueSubheadline)
                     }
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
@@ -154,18 +154,18 @@ struct FeatureCard: View {
                     .frame(width: 56, height: 56)
                 
                 Image(systemName: icon)
-                    .font(.system(size: 24))
+                    .font(.bebasNeue(size: 24))
                     .foregroundColor(color)
             }
             
             // Text Content
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.bebasNeueBodySmall)
                     .foregroundColor(.white)
                 
                 Text(description)
-                    .font(.system(size: 14))
+                    .font(.bebasNeueCaption)
                     .foregroundColor(.white.opacity(0.7))
                     .lineLimit(2)
             }

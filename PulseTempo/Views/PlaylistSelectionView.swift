@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import MusicKit
 
 /// View for selecting playlists from user's Apple Music library
 /// Displays all available playlists with option to view songs in each
@@ -92,11 +93,11 @@ struct PlaylistSelectionView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Select Playlists")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .font(.bebasNeueMedium)
                         .foregroundColor(.primary)
                     
                     Text("Choose playlists for your workout")
-                        .font(.subheadline)
+                        .font(.bebasNeueSubheadline)
                         .foregroundColor(.secondary)
                 }
                 
@@ -142,7 +143,7 @@ struct PlaylistSelectionView: View {
                 .tint(.blue)
             
             Text("Loading playlists...")
-                .font(.subheadline)
+                .font(.bebasNeueSubheadline)
                 .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -157,18 +158,18 @@ struct PlaylistSelectionView: View {
                 .foregroundColor(.orange)
             
             Text("Error Loading Playlists")
-                .font(.headline)
+                .font(.bebasNeueTitle)
                 .foregroundColor(.primary)
             
             Text(message)
-                .font(.subheadline)
+                .font(.bebasNeueSubheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
             
             Button(action: { viewModel.fetchPlaylists() }) {
                 Text("Try Again")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.bebasNeueSubheadline)
                     .foregroundColor(.white)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 12)
@@ -188,11 +189,11 @@ struct PlaylistSelectionView: View {
                 .foregroundColor(.gray)
             
             Text("No Playlists Found")
-                .font(.headline)
+                .font(.bebasNeueTitle)
                 .foregroundColor(.primary)
             
             Text("Create some playlists in Apple Music to get started.")
-                .font(.subheadline)
+                .font(.bebasNeueSubheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
@@ -209,11 +210,11 @@ struct PlaylistSelectionView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("\(viewModel.selectedPlaylistIds.count) playlists selected")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.bebasNeueSubheadline)
                         .foregroundColor(.primary)
                     
                     Text("~\(viewModel.estimatedTrackCount) songs")
-                        .font(.system(size: 14))
+                        .font(.bebasNeueCaption)
                         .foregroundColor(.secondary)
                 }
                 
@@ -221,7 +222,7 @@ struct PlaylistSelectionView: View {
                 
                 Button(action: confirmSelection) {
                     Text("Continue")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.bebasNeueSubheadline)
                         .foregroundColor(.white)
                         .padding(.horizontal, 24)
                         .padding(.vertical, 12)
@@ -256,7 +257,7 @@ struct PlaylistSelectionView: View {
             VStack(spacing: 20) {
                 // Animated music waveform icon
                 Image(systemName: "waveform.circle.fill")
-                    .font(.system(size: 60))
+                    .font(.bebasNeueExtraLarge)
                     .foregroundColor(.blue)
                     .symbolEffect(.pulse, options: .repeating)
                 
@@ -265,7 +266,7 @@ struct PlaylistSelectionView: View {
                     .foregroundColor(.white)
                 
                 Text("Please wait while we analyze the tempo of your songs...")
-                    .font(.subheadline)
+                    .font(.bebasNeueSubheadline)
                     .foregroundColor(.white.opacity(0.8))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 20)
@@ -339,32 +340,39 @@ struct PlaylistCard: View {
             }
             .buttonStyle(PlainButtonStyle())
             
-            // Playlist icon
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.purple.opacity(0.6), Color.blue.opacity(0.6)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 56, height: 56)
-                
-                Image(systemName: "music.note.list")
-                    .font(.system(size: 24))
-                    .foregroundColor(.white)
+            // Playlist artwork or placeholder
+            if let artwork = playlist.artwork,
+               let url = artwork.url(width: 120, height: 120) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 56, height: 56)
+                            .cornerRadius(8)
+                    case .failure(_):
+                        playlistArtworkPlaceholder
+                    case .empty:
+                        ProgressView()
+                            .frame(width: 56, height: 56)
+                    @unknown default:
+                        playlistArtworkPlaceholder
+                    }
+                }
+            } else {
+                playlistArtworkPlaceholder
             }
             
             // Playlist info
             VStack(alignment: .leading, spacing: 4) {
                 Text(playlist.name)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.bebasNeueSubheadline)
                     .foregroundColor(.primary)
                     .lineLimit(1)
                 
                 Text("\(playlist.trackCount) \(playlist.trackCount == 1 ? "song" : "songs")")
-                    .font(.system(size: 14))
+                    .font(.bebasNeueCaption)
                     .foregroundColor(.secondary)
             }
             
@@ -394,6 +402,25 @@ struct PlaylistCard: View {
                 .fill(Color.white.opacity(0.8))
                 .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
         )
+    }
+    
+    /// Placeholder view for missing playlist artwork
+    private var playlistArtworkPlaceholder: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(
+                    LinearGradient(
+                        colors: [Color.purple.opacity(0.6), Color.blue.opacity(0.6)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 56, height: 56)
+            
+            Image(systemName: "music.note.list")
+                .font(.system(size: 24))
+                .foregroundColor(.white)
+        }
     }
 }
 

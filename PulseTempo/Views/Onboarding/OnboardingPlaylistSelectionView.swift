@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import MusicKit
 
 /// Onboarding wrapper for playlist selection
 /// Allows users to select playlists during the onboarding flow
@@ -90,9 +91,9 @@ struct OnboardingPlaylistSelectionView: View {
                 Button(action: onBack) {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.bebasNeueSubheadline)
                         Text("Back")
-                            .font(.system(size: 17))
+                            .font(.bebasNeueBodySmall)
                     }
                     .foregroundColor(.white.opacity(0.8))
                 }
@@ -101,7 +102,7 @@ struct OnboardingPlaylistSelectionView: View {
                 
                 Button(action: onSkip) {
                     Text("Skip")
-                        .font(.system(size: 17))
+                        .font(.bebasNeueBodySmall)
                         .foregroundColor(.white.opacity(0.8))
                 }
             }
@@ -116,7 +117,7 @@ struct OnboardingPlaylistSelectionView: View {
                     .multilineTextAlignment(.center)
                 
                 Text("Select playlists to match your workout tempo")
-                    .font(.system(size: 17))
+                    .font(.bebasNeueBodySmall)
                     .foregroundColor(.white.opacity(0.8))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)
@@ -158,7 +159,7 @@ struct OnboardingPlaylistSelectionView: View {
                 .tint(.white)
             
             Text("Loading playlists...")
-                .font(.subheadline)
+                .font(.bebasNeueSubheadline)
                 .foregroundColor(.white.opacity(0.8))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -173,18 +174,18 @@ struct OnboardingPlaylistSelectionView: View {
                 .foregroundColor(.orange)
             
             Text("Error Loading Playlists")
-                .font(.headline)
+                .font(.bebasNeueTitle)
                 .foregroundColor(.white)
             
             Text(message)
-                .font(.subheadline)
+                .font(.bebasNeueSubheadline)
                 .foregroundColor(.white.opacity(0.8))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
             
             Button(action: { viewModel.fetchPlaylists() }) {
                 Text("Try Again")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.bebasNeueSubheadline)
                     .foregroundColor(.white)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 12)
@@ -210,18 +211,18 @@ struct OnboardingPlaylistSelectionView: View {
                 .foregroundColor(.white.opacity(0.6))
             
             Text("No Playlists Found")
-                .font(.headline)
+                .font(.bebasNeueTitle)
                 .foregroundColor(.white)
             
             Text("Create some playlists in Apple Music to get started, or skip this step for now.")
-                .font(.subheadline)
+                .font(.bebasNeueSubheadline)
                 .foregroundColor(.white.opacity(0.8))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
             
             Button(action: onSkip) {
                 Text("Skip for Now")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.bebasNeueSubheadline)
                     .foregroundColor(.white)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 12)
@@ -248,11 +249,11 @@ struct OnboardingPlaylistSelectionView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("\(viewModel.selectedPlaylistIds.count) playlists selected")
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.bebasNeueSubheadline)
                                 .foregroundColor(.white)
                             
                             Text("~\(viewModel.estimatedTrackCount) songs")
-                                .font(.system(size: 14))
+                                .font(.bebasNeueCaption)
                                 .foregroundColor(.white.opacity(0.7))
                         }
                         
@@ -265,9 +266,9 @@ struct OnboardingPlaylistSelectionView: View {
                     Button(action: confirmSelection) {
                         HStack {
                             Text("Continue")
-                                .font(.system(size: 18, weight: .semibold))
+                                .font(.bebasNeueBody)
                             Image(systemName: "arrow.right")
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.bebasNeueSubheadline)
                         }
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
@@ -289,7 +290,7 @@ struct OnboardingPlaylistSelectionView: View {
             } else {
                 // Skip hint when nothing selected
                 Text("Select playlists or skip to continue")
-                    .font(.system(size: 14))
+                    .font(.bebasNeueCaption)
                     .foregroundColor(.white.opacity(0.6))
                     .padding(.vertical, 20)
             }
@@ -309,7 +310,7 @@ struct OnboardingPlaylistSelectionView: View {
             VStack(spacing: 20) {
                 // Animated music waveform icon
                 Image(systemName: "waveform.circle.fill")
-                    .font(.system(size: 60))
+                    .font(.bebasNeueExtraLarge)
                     .foregroundColor(.pink)
                     .symbolEffect(.pulse, options: .repeating)
                 
@@ -318,7 +319,7 @@ struct OnboardingPlaylistSelectionView: View {
                     .foregroundColor(.white)
                 
                 Text("Please wait while we analyze the tempo of your songs...")
-                    .font(.subheadline)
+                    .font(.bebasNeueSubheadline)
                     .foregroundColor(.white.opacity(0.8))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 20)
@@ -396,32 +397,40 @@ struct OnboardingPlaylistCard: View {
             }
             .buttonStyle(PlainButtonStyle())
             
-            // Playlist icon
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.purple.opacity(0.6), Color.pink.opacity(0.6)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 56, height: 56)
-                
-                Image(systemName: "music.note.list")
-                    .font(.system(size: 24))
-                    .foregroundColor(.white)
+            // Playlist artwork or placeholder
+            if let artwork = playlist.artwork,
+               let url = artwork.url(width: 120, height: 120) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 56, height: 56)
+                            .cornerRadius(8)
+                    case .failure(_):
+                        onboardingArtworkPlaceholder
+                    case .empty:
+                        ProgressView()
+                            .tint(.white)
+                            .frame(width: 56, height: 56)
+                    @unknown default:
+                        onboardingArtworkPlaceholder
+                    }
+                }
+            } else {
+                onboardingArtworkPlaceholder
             }
             
             // Playlist info
             VStack(alignment: .leading, spacing: 4) {
                 Text(playlist.name)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.bebasNeueSubheadline)
                     .foregroundColor(.white)
                     .lineLimit(1)
                 
                 Text("\(playlist.trackCount) \(playlist.trackCount == 1 ? "song" : "songs")")
-                    .font(.system(size: 14))
+                    .font(.bebasNeueCaption)
                     .foregroundColor(.white.opacity(0.7))
             }
             
@@ -454,6 +463,25 @@ struct OnboardingPlaylistCard: View {
                         .stroke(Color.white.opacity(0.2), lineWidth: 1)
                 )
         )
+    }
+    
+    /// Placeholder view for missing playlist artwork
+    private var onboardingArtworkPlaceholder: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(
+                    LinearGradient(
+                        colors: [Color.purple.opacity(0.6), Color.pink.opacity(0.6)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 56, height: 56)
+            
+            Image(systemName: "music.note.list")
+                .font(.system(size: 24))
+                .foregroundColor(.white)
+        }
     }
 }
 

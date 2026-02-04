@@ -31,6 +31,7 @@ struct MusicKitPermissionView: View {
     @State private var isCheckingSubscription = false
     @State private var hasSubscription: Bool?
     @State private var errorMessage: String?
+    @State private var animateGradient = false
 
     private let musicKitManager: MusicKitManager
 
@@ -53,104 +54,148 @@ struct MusicKitPermissionView: View {
     // MARK: - Body
 
     var body: some View {
-        VStack(spacing: 24) {
-            header
-
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Connect Apple Music")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-
-                Text("PulseTempo uses Apple Music to tailor playlists that match your workout intensity. Grant access so we can fetch songs, control playback, and keep the music flowing during every session.")
-                    .font(.system(size: 16))
-                    .foregroundColor(.secondary)
+        ZStack {
+            // Animated gradient background (matching WelcomeView)
+            LinearGradient(
+                colors: [
+                    Color(red: 0.1, green: 0.1, blue: 0.2),
+                    Color(red: 0.2, green: 0.1, blue: 0.3),
+                    Color(red: 0.1, green: 0.2, blue: 0.3)
+                ],
+                startPoint: animateGradient ? .topLeading : .bottomLeading,
+                endPoint: animateGradient ? .bottomTrailing : .topTrailing
+            )
+            .ignoresSafeArea()
+            .onAppear {
+                withAnimation(.easeInOut(duration: 3.0).repeatForever(autoreverses: true)) {
+                    animateGradient = true
+                }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            
+            VStack(spacing: 24) {
+                header
 
-            statusView
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Connect Apple Music")
+                        .font(.bebasNeueMedium)
+                        .foregroundColor(.white)
 
-            if let guidanceText = guidanceText {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("How to continue")
-                        .font(.system(size: 16, weight: .semibold))
-                    Text(guidanceText)
-                        .font(.system(size: 14))
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    Text("PulseTempo uses Apple Music to tailor playlists that match your workout intensity. Grant access so we can fetch songs, control playback, and keep the music flowing during every session.")
+                        .font(.bebasNeueSubheadline)
+                        .foregroundColor(.white.opacity(0.7))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-            }
 
-            Spacer()
+                statusView
 
-            if let errorMessage {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Something went wrong")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.red)
-                    Text(errorMessage)
-                        .font(.system(size: 14))
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            VStack(spacing: 12) {
-                Button(action: handlePrimaryAction) {
-                    HStack(spacing: 12) {
-                        if isRequesting {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle())
-                        }
-
-                        Text(primaryButtonTitle)
-                            .font(.system(size: 18, weight: .semibold))
+                if let guidanceText = guidanceText {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("How to continue")
+                            .font(.bebasNeueSubheadline)
+                            .foregroundColor(.white)
+                        Text(guidanceText)
+                            .font(.bebasNeueCaption)
+                            .foregroundColor(.white.opacity(0.7))
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 56)
-                    .background(isRequesting ? Color.gray : Color.accentColor)
-                    .cornerRadius(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.white.opacity(0.1))
+                            .background(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                            )
+                    )
                 }
-                .disabled(isRequesting)
 
-                if shouldShowOpenSettings {
-                    Button(action: openSettings) {
-                        Text("Open Settings")
-                            .font(.system(size: 16, weight: .semibold))
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 48)
+                Spacer()
+
+                if let errorMessage {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Something went wrong")
+                            .font(.bebasNeueSubheadline)
+                            .foregroundColor(.red)
+                        Text(errorMessage)
+                            .font(.bebasNeueCaption)
+                            .foregroundColor(.white.opacity(0.7))
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    .buttonStyle(.bordered)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                if shouldShowSubscriptionOffer {
-                    Button(action: presentSubscriptionOffer) {
-                        HStack(spacing: 8) {
-                            if isCheckingSubscription {
+                VStack(spacing: 12) {
+                    Button(action: handlePrimaryAction) {
+                        HStack(spacing: 12) {
+                            if isRequesting {
                                 ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle())
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
                             }
 
-                            Text("Subscribe to Apple Music")
-                                .font(.system(size: 16, weight: .semibold))
+                            Text(primaryButtonTitle)
+                                .font(.bebasNeueBody)
                         }
+                        .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 48)
+                        .frame(height: 56)
+                        .background(
+                            LinearGradient(
+                                colors: isRequesting ? [Color.gray] : [Color.pink, Color.purple],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .cornerRadius(16)
+                        .shadow(color: Color.pink.opacity(0.4), radius: 15, x: 0, y: 8)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.pink)
-                    .disabled(isCheckingSubscription)
-                }
+                    .disabled(isRequesting)
 
-                if let onSkip {
-                    Button("Skip for now", action: onSkip)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.secondary)
+                    if shouldShowOpenSettings {
+                        Button(action: openSettings) {
+                            Text("Open Settings")
+                                .font(.bebasNeueSubheadline)
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 48)
+                                .background(Color.white.opacity(0.1))
+                                .cornerRadius(12)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                                )
+                        }
+                    }
+
+                    if shouldShowSubscriptionOffer {
+                        Button(action: presentSubscriptionOffer) {
+                            HStack(spacing: 8) {
+                                if isCheckingSubscription {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                }
+
+                                Text("Subscribe to Apple Music")
+                                    .font(.bebasNeueSubheadline)
+                            }
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 48)
+                            .background(Color.pink.opacity(0.8))
+                            .cornerRadius(12)
+                        }
+                        .disabled(isCheckingSubscription)
+                    }
+
+                    if let onSkip {
+                        Button("Skip for now", action: onSkip)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.white.opacity(0.6))
+                    }
                 }
             }
+            .padding(24)
         }
-        .padding(24)
         .onAppear(perform: refreshAuthorizationStatus)
     }
 
@@ -161,15 +206,29 @@ struct MusicKitPermissionView: View {
             if let onBack {
                 Button(action: onBack) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.bebasNeueSubheadline)
+                        .foregroundColor(.white)
                 }
             }
 
             Spacer()
 
-            Image(systemName: "music.note.list")
-                .font(.system(size: 28))
-                .foregroundColor(.accentColor)
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.purple, Color.pink],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 70, height: 70)
+                    .shadow(color: Color.purple.opacity(0.5), radius: 15, x: 0, y: 8)
+                
+                Image(systemName: "music.note.list")
+                    .font(.system(size: 28))
+                    .foregroundColor(.white)
+            }
 
             Spacer()
 
@@ -183,7 +242,8 @@ struct MusicKitPermissionView: View {
     private var statusView: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Authorization Status")
-                .font(.system(size: 16, weight: .semibold))
+                .font(.bebasNeueSubheadline)
+                .foregroundColor(.white)
 
             HStack(spacing: 12) {
                 Circle()
@@ -192,14 +252,18 @@ struct MusicKitPermissionView: View {
 
                 Text(statusDescription)
                     .font(.system(size: 15))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.white.opacity(0.7))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.secondarySystemBackground))
+                .fill(Color.white.opacity(0.1))
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                )
         )
     }
 

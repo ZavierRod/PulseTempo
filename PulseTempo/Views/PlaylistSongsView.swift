@@ -85,9 +85,9 @@ struct PlaylistSongsView: View {
                     Button(action: dismiss) {
                         HStack(spacing: 4) {
                             Image(systemName: "chevron.left")
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.bebasNeueSubheadline)
                             Text("Back")
-                                .font(.system(size: 17))
+                                .font(.bebasNeueBodySmall)
                         }
                         .foregroundColor(.blue)
                     }
@@ -120,13 +120,13 @@ struct PlaylistSongsView: View {
                 
                 // Playlist name
                 Text(playlist.name)
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .font(.bebasNeueMedium)
                     .foregroundColor(.primary)
                     .multilineTextAlignment(.center)
                 
                 // Track count
                 Text("\(tracks.count) \(tracks.count == 1 ? "song" : "songs")")
-                    .font(.subheadline)
+                    .font(.bebasNeueSubheadline)
                     .foregroundColor(.secondary)
             }
             .padding(.bottom, 16)
@@ -157,7 +157,7 @@ struct PlaylistSongsView: View {
                 .tint(.blue)
             
             Text("Loading songs...")
-                .font(.subheadline)
+                .font(.bebasNeueSubheadline)
                 .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -172,18 +172,18 @@ struct PlaylistSongsView: View {
                 .foregroundColor(.orange)
             
             Text("Error Loading Songs")
-                .font(.headline)
+                .font(.bebasNeueTitle)
                 .foregroundColor(.primary)
             
             Text(message)
-                .font(.subheadline)
+                .font(.bebasNeueSubheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
             
             Button(action: fetchTracks) {
                 Text("Try Again")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.bebasNeueSubheadline)
                     .foregroundColor(.white)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 12)
@@ -203,11 +203,11 @@ struct PlaylistSongsView: View {
                 .foregroundColor(.gray)
             
             Text("No Songs Found")
-                .font(.headline)
+                .font(.bebasNeueTitle)
                 .foregroundColor(.primary)
             
             Text("This playlist doesn't contain any songs.")
-                .font(.subheadline)
+                .font(.bebasNeueSubheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
@@ -247,27 +247,39 @@ struct TrackRow: View {
     
     var body: some View {
         HStack(spacing: 12) {
-            // Track number or music icon
-            ZStack {
-                Circle()
-                    .fill(Color.blue.opacity(0.1))
-                    .frame(width: 44, height: 44)
-                
-                Image(systemName: "music.note")
-                    .font(.system(size: 16))
-                    .foregroundColor(.blue)
+            // Album artwork or placeholder
+            if let artworkURL = track.artworkURL {
+                AsyncImage(url: artworkURL) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 50, height: 50)
+                            .cornerRadius(8)
+                    case .failure(_):
+                        artworkPlaceholder
+                    case .empty:
+                        ProgressView()
+                            .frame(width: 50, height: 50)
+                    @unknown default:
+                        artworkPlaceholder
+                    }
+                }
+            } else {
+                artworkPlaceholder
             }
             
             // Track info
             VStack(alignment: .leading, spacing: 4) {
                 Text(track.title)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.bebasNeueSubheadline)
                     .foregroundColor(.primary)
                     .lineLimit(1)
                 
                 HStack(spacing: 8) {
                     Text(track.artist)
-                        .font(.system(size: 14))
+                        .font(.bebasNeueCaption)
                         .foregroundColor(.secondary)
                         .lineLimit(1)
                     
@@ -290,7 +302,7 @@ struct TrackRow: View {
             
             // Duration
             Text(formatDuration(track.durationSeconds))
-                .font(.system(size: 14))
+                .font(.bebasNeueCaption)
                 .foregroundColor(.secondary)
         }
         .padding(12)
@@ -299,6 +311,19 @@ struct TrackRow: View {
                 .fill(Color.white.opacity(0.8))
                 .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
         )
+    }
+    
+    /// Placeholder view for missing artwork
+    private var artworkPlaceholder: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.blue.opacity(0.1))
+                .frame(width: 50, height: 50)
+            
+            Image(systemName: "music.note")
+                .font(.system(size: 20))
+                .foregroundColor(.blue)
+        }
     }
     
     /// Format duration in seconds to MM:SS format

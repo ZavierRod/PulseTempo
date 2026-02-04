@@ -96,15 +96,8 @@ class AuthService: ObservableObject {
     
     private let keychainManager = KeychainManager.shared
     
-    // Backend URL - change for production
-    // TODO: Move to configuration/environment
-    private let baseURL: String = {
-        #if targetEnvironment(simulator)
-        return "http://localhost:8000"
-        #else
-        return "http://192.168.1.40:8000"  // Local network for device testing
-        #endif
-    }()
+    // Backend URL - Railway production server
+    private let baseURL: String = "https://pulsetempo-production.up.railway.app"
     
     // MARK: - Initialization
     

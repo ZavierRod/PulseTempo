@@ -700,13 +700,16 @@ class MusicService: ObservableObject, MusicServiceProtocol {
                     if cachedBPM != nil {
                         print("📦 Using cached BPM for '\(track.attributes.name)': \(cachedBPM!)")
                     }
+                    // Extract artwork URL from track attributes
+                    let artworkURL = track.attributes.artwork?.url(width: 120, height: 120)
+                    
                     return Track(
                         id: track.id,
                         title: track.attributes.name,
                         artist: track.attributes.artistName,
                         durationSeconds: Int(track.attributes.durationInMillis / 1000),
                         bpm: cachedBPM,  // Use cached BPM if available
-                        artworkURL: nil  // Artwork loaded when track plays
+                        artworkURL: artworkURL
                     )
                 }
                 
@@ -1124,6 +1127,22 @@ private struct LibraryTrackAttributes: Codable {
     let artistName: String
     let durationInMillis: Int
     let previews: [PreviewAsset]?
+    let artwork: ArtworkAttributes?
+}
+
+private struct ArtworkAttributes: Codable {
+    let url: String?
+    let width: Int?
+    let height: Int?
+    
+    /// Generate artwork URL with specified dimensions
+    func url(width: Int, height: Int) -> URL? {
+        guard let urlTemplate = url else { return nil }
+        let urlString = urlTemplate
+            .replacingOccurrences(of: "{w}", with: "\(width)")
+            .replacingOccurrences(of: "{h}", with: "\(height)")
+        return URL(string: urlString)
+    }
 }
 
 private struct PreviewAsset: Codable {
