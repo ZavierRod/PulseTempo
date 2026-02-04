@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timedelta
 from typing import Any, Union, Optional
 from jose import jwt
@@ -7,8 +8,7 @@ from app.core.config import settings
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 ALGORITHM = "HS256"
-# In production, these should be in settings/env vars
-SECRET_KEY = "dev_secret_key_change_in_production" 
+SECRET_KEY = os.getenv("SECRET_KEY", "dev_secret_key_change_in_production") 
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 

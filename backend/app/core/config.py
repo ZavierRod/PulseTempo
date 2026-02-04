@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     POSTGRES_DB: str = os.getenv("POSTGRES_DB", "pulsetempo")
     POSTGRES_PORT: str = os.getenv("POSTGRES_PORT", "5432")
     
+    # Security
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "dev_secret_key_change_in_production")
+    
     # Construct DATABASE_URL
     # If running in Docker, use the service name 'db'
     # If running locally, use 'localhost' and mapped port (5433)
