@@ -9,23 +9,26 @@ import SwiftUI
 
 /// Reusable animated gradient background - white/gray fading to black (inSync theme)
 struct GradientBackground: View {
-    @State private var animateGradient = false
+    @State private var startPoint: UnitPoint = .topLeading
+    @State private var endPoint: UnitPoint = .bottomTrailing
     
     var body: some View {
         LinearGradient(
             colors: [
                 Color(white: 0.85),
-                Color(white: 0.6),
-                Color(white: 0.3),
+                Color(white: 0.65),
+                Color(white: 0.4),
+                Color(white: 0.15),
                 Color.black
             ],
-            startPoint: animateGradient ? .topLeading : .bottomLeading,
-            endPoint: animateGradient ? .bottomTrailing : .topTrailing
+            startPoint: startPoint,
+            endPoint: endPoint
         )
         .ignoresSafeArea()
         .onAppear {
-            withAnimation(.easeInOut(duration: 4.0).repeatForever(autoreverses: true)) {
-                animateGradient = true
+            withAnimation(.easeInOut(duration: 6.0).repeatForever(autoreverses: true)) {
+                startPoint = .topTrailing
+                endPoint = .bottomLeading
             }
         }
     }

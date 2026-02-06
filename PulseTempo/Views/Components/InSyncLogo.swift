@@ -16,9 +16,9 @@ struct InSyncLogo: View {
         
         var width: CGFloat {
             switch self {
-            case .small: return 120
-            case .medium: return 200
-            case .large: return 280
+            case .small: return 140
+            case .medium: return 240
+            case .large: return 340
             }
         }
     }
