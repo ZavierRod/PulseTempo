@@ -1,6 +1,6 @@
 //
 //  AuthenticationView.swift
-//  PulseTempo
+//  inSync
 //
 //  Created by Zavier Rodrigues on 1/28/26.
 //
@@ -38,7 +38,6 @@ struct AuthenticationView: View {
     @State private var localError: String?
     
     @FocusState private var focusedField: Field?
-    @State private var animateGradient = false
     
     private enum Field {
         case email, password, confirmPassword, firstName, lastName
@@ -48,22 +47,8 @@ struct AuthenticationView: View {
     
     var body: some View {
         ZStack {
-            // Animated gradient background (matching WelcomeView)
-            LinearGradient(
-                colors: [
-                    Color(red: 0.1, green: 0.1, blue: 0.2),
-                    Color(red: 0.2, green: 0.1, blue: 0.3),
-                    Color(red: 0.1, green: 0.2, blue: 0.3)
-                ],
-                startPoint: animateGradient ? .topLeading : .bottomLeading,
-                endPoint: animateGradient ? .bottomTrailing : .topTrailing
-            )
-            .ignoresSafeArea()
-            .onAppear {
-                withAnimation(.easeInOut(duration: 3.0).repeatForever(autoreverses: true)) {
-                    animateGradient = true
-                }
-            }
+            // White-to-black gradient background (inSync theme)
+            GradientBackground()
             
             ScrollView {
                 VStack(spacing: 24) {
@@ -102,22 +87,7 @@ struct AuthenticationView: View {
             
             Spacer()
             
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.pink, Color.purple],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 70, height: 70)
-                    .shadow(color: Color.pink.opacity(0.5), radius: 15, x: 0, y: 8)
-                
-                Image(systemName: "person.fill")
-                    .font(.system(size: 30))
-                    .foregroundColor(.white)
-            }
+            InSyncLogo(size: .small, showText: false)
             
             Spacer()
             

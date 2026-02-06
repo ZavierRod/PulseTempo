@@ -1,6 +1,6 @@
 //
 //  ActiveRunView.swift
-//  PulseTempo
+//  inSync
 //
 //  Created by Zavier Rodrigues on 2/3/26.
 //

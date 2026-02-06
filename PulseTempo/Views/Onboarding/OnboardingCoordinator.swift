@@ -1,3 +1,8 @@
+//
+//  OnboardingCoordinator.swift
+//  inSync
+//
+
 import SwiftUI
 import HealthKit
 import MusicKit

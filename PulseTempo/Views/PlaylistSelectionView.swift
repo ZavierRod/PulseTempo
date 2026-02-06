@@ -1,6 +1,6 @@
 //
 //  PlaylistSelectionView.swift
-//  PulseTempo
+//  inSync
 //
 //  Created by Zavier Rodrigues on 11/10/25.
 //
@@ -28,16 +28,8 @@ struct PlaylistSelectionView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                // Background gradient
-                LinearGradient(
-                    gradient: Gradient(colors: [
-                        Color(red: 0.95, green: 0.97, blue: 1.0),
-                        Color(red: 0.90, green: 0.95, blue: 1.0)
-                    ]),
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
+                // White-to-black gradient background (inSync theme)
+                GradientBackground()
                 
                 VStack(spacing: 0) {
                     // Header
@@ -94,11 +86,11 @@ struct PlaylistSelectionView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Select Playlists")
                         .font(.bebasNeueMedium)
-                        .foregroundColor(.primary)
+                        .foregroundColor(.white)
                     
                     Text("Choose playlists for your workout")
                         .font(.bebasNeueSubheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.white.opacity(0.7))
                 }
                 
                 Spacer()
@@ -107,7 +99,7 @@ struct PlaylistSelectionView: View {
             .padding(.top, 16)
             .padding(.bottom, 8)
         }
-        .background(Color.white.opacity(0.5))
+        .background(Color.black.opacity(0.2))
     }
     
     // MARK: - Playlist List View
@@ -144,7 +136,7 @@ struct PlaylistSelectionView: View {
             
             Text("Loading playlists...")
                 .font(.bebasNeueSubheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(.white.opacity(0.8))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -159,11 +151,11 @@ struct PlaylistSelectionView: View {
             
             Text("Error Loading Playlists")
                 .font(.bebasNeueTitle)
-                .foregroundColor(.primary)
+                .foregroundColor(.white)
             
             Text(message)
                 .font(.bebasNeueSubheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(.white.opacity(0.8))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
             
@@ -173,7 +165,13 @@ struct PlaylistSelectionView: View {
                     .foregroundColor(.white)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 12)
-                    .background(Color.blue)
+                    .background(
+                        LinearGradient(
+                            colors: [Color.pink, Color.purple],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
                     .cornerRadius(12)
             }
         }
@@ -190,11 +188,11 @@ struct PlaylistSelectionView: View {
             
             Text("No Playlists Found")
                 .font(.bebasNeueTitle)
-                .foregroundColor(.primary)
+                .foregroundColor(.white)
             
             Text("Create some playlists in Apple Music to get started.")
                 .font(.bebasNeueSubheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(.white.opacity(0.8))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
         }
@@ -211,11 +209,11 @@ struct PlaylistSelectionView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("\(viewModel.selectedPlaylistIds.count) playlists selected")
                         .font(.bebasNeueSubheadline)
-                        .foregroundColor(.primary)
+                        .foregroundColor(.white)
                     
                     Text("~\(viewModel.estimatedTrackCount) songs")
                         .font(.bebasNeueCaption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.white.opacity(0.7))
                 }
                 
                 Spacer()
@@ -239,7 +237,7 @@ struct PlaylistSelectionView: View {
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 16)
-            .background(Color.white.opacity(0.95))
+            .background(Color.black.opacity(0.3))
         }
         }
 
@@ -368,12 +366,12 @@ struct PlaylistCard: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(playlist.name)
                     .font(.bebasNeueSubheadline)
-                    .foregroundColor(.primary)
+                    .foregroundColor(.white)
                     .lineLimit(1)
                 
                 Text("\(playlist.trackCount) \(playlist.trackCount == 1 ? "song" : "songs")")
                     .font(.bebasNeueCaption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.white.opacity(0.7))
             }
             
             Spacer()
@@ -386,12 +384,12 @@ struct PlaylistCard: View {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                 }
-                .foregroundColor(.blue)
+                .foregroundColor(.white)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.blue.opacity(0.1))
+                        .fill(Color.white.opacity(0.2))
                 )
             }
             .buttonStyle(PlainButtonStyle())
@@ -399,8 +397,11 @@ struct PlaylistCard: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white.opacity(0.8))
-                .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+                .fill(Color.white.opacity(0.1))
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                )
         )
     }
     

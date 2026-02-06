@@ -1,6 +1,6 @@
 //
 //  SettingsView.swift
-//  PulseTempo
+//  inSync
 //
 //  Created by Antigravity on 12/12/24.
 //

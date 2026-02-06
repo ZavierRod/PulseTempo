@@ -1,6 +1,6 @@
 //
 //  OnboardingPlaylistSelectionView.swift
-//  PulseTempo
+//  inSync
 //
 //  Created by Zavier Rodrigues on 11/10/25.
 //
@@ -33,17 +33,8 @@ struct OnboardingPlaylistSelectionView: View {
     
     var body: some View {
         ZStack {
-            // Background gradient matching onboarding style
-            LinearGradient(
-                colors: [
-                    Color(red: 0.1, green: 0.1, blue: 0.2),
-                    Color(red: 0.2, green: 0.1, blue: 0.3),
-                    Color(red: 0.1, green: 0.2, blue: 0.3)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            // White-to-black gradient background (inSync theme)
+            GradientBackground()
             
             VStack(spacing: 0) {
                 // Header with back and skip buttons

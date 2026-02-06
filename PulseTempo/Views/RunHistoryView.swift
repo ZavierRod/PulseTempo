@@ -1,6 +1,6 @@
 //
 //  RunHistoryView.swift
-//  PulseTempo
+//  inSync
 //
 //  Created by Zavier Rodrigues on 1/28/26.
 //

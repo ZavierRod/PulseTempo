@@ -1,6 +1,6 @@
 //
 //  MusicKitPermissionView.swift
-//  PulseTempo
+//  inSync
 //
 //  Created by OpenAI Assistant on 11/7/25.
 //
@@ -31,7 +31,6 @@ struct MusicKitPermissionView: View {
     @State private var isCheckingSubscription = false
     @State private var hasSubscription: Bool?
     @State private var errorMessage: String?
-    @State private var animateGradient = false
 
     private let musicKitManager: MusicKitManager
 
@@ -55,22 +54,8 @@ struct MusicKitPermissionView: View {
 
     var body: some View {
         ZStack {
-            // Animated gradient background (matching WelcomeView)
-            LinearGradient(
-                colors: [
-                    Color(red: 0.1, green: 0.1, blue: 0.2),
-                    Color(red: 0.2, green: 0.1, blue: 0.3),
-                    Color(red: 0.1, green: 0.2, blue: 0.3)
-                ],
-                startPoint: animateGradient ? .topLeading : .bottomLeading,
-                endPoint: animateGradient ? .bottomTrailing : .topTrailing
-            )
-            .ignoresSafeArea()
-            .onAppear {
-                withAnimation(.easeInOut(duration: 3.0).repeatForever(autoreverses: true)) {
-                    animateGradient = true
-                }
-            }
+            // White-to-black gradient background (inSync theme)
+            GradientBackground()
             
             VStack(spacing: 24) {
                 header
@@ -80,7 +65,7 @@ struct MusicKitPermissionView: View {
                         .font(.bebasNeueMedium)
                         .foregroundColor(.white)
 
-                    Text("PulseTempo uses Apple Music to tailor playlists that match your workout intensity. Grant access so we can fetch songs, control playback, and keep the music flowing during every session.")
+                    Text("inSync uses Apple Music to tailor playlists that match your workout intensity. Grant access so we can fetch songs, control playback, and keep the music flowing during every session.")
                         .font(.bebasNeueSubheadline)
                         .foregroundColor(.white.opacity(0.7))
                 }
@@ -318,7 +303,7 @@ struct MusicKitPermissionView: View {
     private var guidanceText: String? {
         switch authorizationStatus {
         case .denied:
-            return "Apple Music access was denied. You can re-enable it at any time in Settings → Music → Apps → PulseTempo."
+            return "Apple Music access was denied. You can re-enable it at any time in Settings → Music → Apps → inSync."
         case .restricted:
             return "This device has restrictions that prevent Apple Music access. Check Screen Time restrictions or contact your administrator."
         default:

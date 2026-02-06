@@ -1,6 +1,6 @@
 //
 //  WelcomeView.swift
-//  PulseTempo
+//  inSync
 //
 //  Created by Zavier Rodrigues on 11/5/25.
 //
@@ -19,61 +19,20 @@ struct WelcomeView: View {
     // MARK: - State
     
     @State private var currentFeatureIndex = 0
-    @State private var animateGradient = false
     
     // MARK: - Body
     
     var body: some View {
         ZStack {
-            // Animated gradient background
-            LinearGradient(
-                colors: [
-                    Color(red: 0.1, green: 0.1, blue: 0.2),
-                    Color(red: 0.2, green: 0.1, blue: 0.3),
-                    Color(red: 0.1, green: 0.2, blue: 0.3)
-                ],
-                startPoint: animateGradient ? .topLeading : .bottomLeading,
-                endPoint: animateGradient ? .bottomTrailing : .topTrailing
-            )
-            .ignoresSafeArea()
-            .onAppear {
-                withAnimation(.easeInOut(duration: 3.0).repeatForever(autoreverses: true)) {
-                    animateGradient = true
-                }
-            }
+            // White-to-black gradient background (inSync theme)
+            GradientBackground()
             
             VStack(spacing: 0) {
                 Spacer()
                 
-                // App Icon/Logo
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color.pink, Color.purple],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 120, height: 120)
-                        .shadow(color: Color.pink.opacity(0.5), radius: 20, x: 0, y: 10)
-                    
-                    Image(systemName: "heart.fill")
-                        .font(.bebasNeue(size: 50))
-                        .foregroundColor(.white)
-                    
-                    Image(systemName: "music.note")
-                        .font(.bebasNeue(size: 30))
-                        .foregroundColor(.white)
-                        .offset(x: 25, y: -25)
-                }
-                .padding(.bottom, 40)
-                
-                // App Name
-                Text("PulseTempo")
-                    .font(.bebasNeue(size: 48))
-                    .foregroundColor(.white)
-                    .padding(.bottom, 12)
+                // App Logo
+                InSyncLogo(size: .large, showText: true)
+                    .padding(.bottom, 20)
                 
                 // Tagline
                 Text("Music That Moves With You")

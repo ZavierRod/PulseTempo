@@ -1,6 +1,6 @@
 //
 //  WearableSelectionView.swift
-//  PulseTempo
+//  inSync
 //
 //  Created by Antigravity on 12/12/24.
 //
@@ -26,28 +26,13 @@ struct WearableSelectionView: View {
     
     @State private var selectedDevice: WearableDevice = .appleWatch
     @State private var showingSetupInstructions = false
-    @State private var animateGradient = false
     
     // MARK: - Body
     
     var body: some View {
         ZStack {
-            // Animated gradient background (matching WelcomeView)
-            LinearGradient(
-                colors: [
-                    Color(red: 0.1, green: 0.1, blue: 0.2),
-                    Color(red: 0.2, green: 0.1, blue: 0.3),
-                    Color(red: 0.1, green: 0.2, blue: 0.3)
-                ],
-                startPoint: animateGradient ? .topLeading : .bottomLeading,
-                endPoint: animateGradient ? .bottomTrailing : .topTrailing
-            )
-            .ignoresSafeArea()
-            .onAppear {
-                withAnimation(.easeInOut(duration: 3.0).repeatForever(autoreverses: true)) {
-                    animateGradient = true
-                }
-            }
+            // White-to-black gradient background (inSync theme)
+            GradientBackground()
             
             VStack(spacing: 0) {
                 // Header

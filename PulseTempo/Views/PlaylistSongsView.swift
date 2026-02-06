@@ -1,6 +1,6 @@
 //
 //  PlaylistSongsView.swift
-//  PulseTempo
+//  inSync
 //
 //  Created by Zavier Rodrigues on 11/10/25.
 //
@@ -38,16 +38,8 @@ struct PlaylistSongsView: View {
     
     var body: some View {
         ZStack {
-            // Background gradient
-            LinearGradient(
-                gradient: Gradient(colors: [
-                    Color(red: 0.95, green: 0.97, blue: 1.0),
-                    Color(red: 0.90, green: 0.95, blue: 1.0)
-                ]),
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            // White-to-black gradient background (inSync theme)
+            GradientBackground()
             
             VStack(spacing: 0) {
                 // Header
@@ -121,17 +113,17 @@ struct PlaylistSongsView: View {
                 // Playlist name
                 Text(playlist.name)
                     .font(.bebasNeueMedium)
-                    .foregroundColor(.primary)
+                    .foregroundColor(.white)
                     .multilineTextAlignment(.center)
                 
                 // Track count
                 Text("\(tracks.count) \(tracks.count == 1 ? "song" : "songs")")
                     .font(.bebasNeueSubheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.white.opacity(0.7))
             }
             .padding(.bottom, 16)
         }
-        .background(Color.white.opacity(0.5))
+        .background(Color.black.opacity(0.2))
     }
     
     // MARK: - Track List View
@@ -158,7 +150,7 @@ struct PlaylistSongsView: View {
             
             Text("Loading songs...")
                 .font(.bebasNeueSubheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(.white.opacity(0.8))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -173,11 +165,11 @@ struct PlaylistSongsView: View {
             
             Text("Error Loading Songs")
                 .font(.bebasNeueTitle)
-                .foregroundColor(.primary)
+                .foregroundColor(.white)
             
             Text(message)
                 .font(.bebasNeueSubheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(.white.opacity(0.8))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
             
@@ -187,7 +179,13 @@ struct PlaylistSongsView: View {
                     .foregroundColor(.white)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 12)
-                    .background(Color.blue)
+                    .background(
+                        LinearGradient(
+                            colors: [Color.pink, Color.purple],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
                     .cornerRadius(12)
             }
         }
@@ -204,11 +202,11 @@ struct PlaylistSongsView: View {
             
             Text("No Songs Found")
                 .font(.bebasNeueTitle)
-                .foregroundColor(.primary)
+                .foregroundColor(.white)
             
             Text("This playlist doesn't contain any songs.")
                 .font(.bebasNeueSubheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(.white.opacity(0.8))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
         }
@@ -274,13 +272,13 @@ struct TrackRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(track.title)
                     .font(.bebasNeueSubheadline)
-                    .foregroundColor(.primary)
+                    .foregroundColor(.white)
                     .lineLimit(1)
                 
                 HStack(spacing: 8) {
                     Text(track.artist)
                         .font(.bebasNeueCaption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.white.opacity(0.7))
                         .lineLimit(1)
                     
                     if let bpm = track.bpm {
@@ -303,13 +301,16 @@ struct TrackRow: View {
             // Duration
             Text(formatDuration(track.durationSeconds))
                 .font(.bebasNeueCaption)
-                .foregroundColor(.secondary)
+                .foregroundColor(.white.opacity(0.7))
         }
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white.opacity(0.8))
-                .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+                .fill(Color.white.opacity(0.1))
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                )
         )
     }
     

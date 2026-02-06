@@ -1,6 +1,6 @@
 //
 //  HomeView.swift
-//  PulseTempo
+//  inSync
 //
 //  Created by Zavier Rodrigues on 11/17/25.
 //
@@ -61,7 +61,7 @@ struct HomeView: View {
                     .padding(.vertical, 16)
                 }
             }
-            .navigationTitle("PulseTempo")
+            .navigationTitle("inSync")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {

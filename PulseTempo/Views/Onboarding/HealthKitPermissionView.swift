@@ -1,6 +1,6 @@
 //
 //  HealthKitPermissionView.swift
-//  PulseTempo
+//  inSync
 //
 //  Created by OpenAI Assistant on 11/6/25.
 //
@@ -43,30 +43,12 @@ struct HealthKitPermissionView: View {
     @State private var isRequesting = false
     @State private var errorMessage: String?
 
-    // MARK: - State for Animation
-    
-    @State private var animateGradient = false
-    
     // MARK: - Body
 
     var body: some View {
         ZStack {
-            // Animated gradient background (matching WelcomeView)
-            LinearGradient(
-                colors: [
-                    Color(red: 0.1, green: 0.1, blue: 0.2),
-                    Color(red: 0.2, green: 0.1, blue: 0.3),
-                    Color(red: 0.1, green: 0.2, blue: 0.3)
-                ],
-                startPoint: animateGradient ? .topLeading : .bottomLeading,
-                endPoint: animateGradient ? .bottomTrailing : .topTrailing
-            )
-            .ignoresSafeArea()
-            .onAppear {
-                withAnimation(.easeInOut(duration: 3.0).repeatForever(autoreverses: true)) {
-                    animateGradient = true
-                }
-            }
+            // White-to-black gradient background (inSync theme)
+            GradientBackground()
             
             VStack(spacing: 24) {
                 header
@@ -76,7 +58,7 @@ struct HealthKitPermissionView: View {
                         .font(.bebasNeueMedium)
                         .foregroundColor(.white)
 
-                    Text("PulseTempo adapts every playlist to your workout intensity. To do that, we need permission to read your heart-rate data from Apple Health. We only read; we never write or store your health data outside your device.")
+                    Text("inSync adapts every playlist to your workout intensity. To do that, we need permission to read your heart-rate data from Apple Health. We only read; we never write or store your health data outside your device.")
                         .font(.bebasNeueSubheadline)
                         .foregroundColor(.white.opacity(0.7))
                 }

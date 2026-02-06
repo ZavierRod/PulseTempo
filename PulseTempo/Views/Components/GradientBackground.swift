@@ -1,35 +1,54 @@
 //
 //  GradientBackground.swift
-//  PulseTempo
+//  inSync
 //
 //  Created by Zavier Rodrigues on 2/5/26.
 //
 
 import SwiftUI
 
-/// Reusable animated dark gradient background matching the onboarding theme
+/// Reusable gradient background - white/gray fading to black (inSync theme)
 struct GradientBackground: View {
-    @State private var animateGradient = false
+    var topColor: Color = Color(white: 0.85)
+    var middleColor: Color = Color(white: 0.5)
+    var bottomColor: Color = Color.black
     
     var body: some View {
         LinearGradient(
-            colors: [
-                Color(red: 0.1, green: 0.1, blue: 0.2),
-                Color(red: 0.2, green: 0.1, blue: 0.3),
-                Color(red: 0.1, green: 0.2, blue: 0.3)
-            ],
-            startPoint: animateGradient ? .topLeading : .bottomLeading,
-            endPoint: animateGradient ? .bottomTrailing : .topTrailing
+            gradient: Gradient(colors: [
+                topColor,
+                middleColor,
+                bottomColor
+            ]),
+            startPoint: .top,
+            endPoint: .bottom
         )
         .ignoresSafeArea()
-        .onAppear {
-            withAnimation(.easeInOut(duration: 3.0).repeatForever(autoreverses: true)) {
-                animateGradient = true
-            }
-        }
     }
 }
 
-#Preview {
+/// Variant with accent color tint at top (like workout mode)
+struct AccentGradientBackground: View {
+    var accentColor: Color = .gray
+    
+    var body: some View {
+        LinearGradient(
+            gradient: Gradient(colors: [
+                accentColor.opacity(0.8),
+                accentColor.opacity(0.4),
+                Color.black
+            ]),
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .ignoresSafeArea()
+    }
+}
+
+#Preview("Default") {
     GradientBackground()
+}
+
+#Preview("Accent") {
+    AccentGradientBackground(accentColor: .red)
 }
