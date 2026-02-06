@@ -31,7 +31,7 @@ struct WelcomeView: View {
                 Spacer()
                 
                 // App Logo
-                InSyncLogo(size: .large, showText: true)
+                InSyncLogo(size: .large)
                     .padding(.bottom, 20)
                 
                 // Tagline
