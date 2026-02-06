@@ -780,7 +780,16 @@ class MusicService: ObservableObject, MusicServiceProtocol {
         
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
-            let (data, _) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            // Check HTTP status code
+            if let httpResponse = response as? HTTPURLResponse {
+                if httpResponse.statusCode != 200 {
+                    let responseBody = String(data: data, encoding: .utf8) ?? "Unknown"
+                    print("❌ BPM API returned status \(httpResponse.statusCode): \(responseBody)")
+                    return
+                }
+            }
             
             // Simple decoding of response
             if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
