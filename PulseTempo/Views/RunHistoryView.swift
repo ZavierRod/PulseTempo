@@ -22,7 +22,7 @@ struct RunHistoryView: View {
         NavigationView {
             ZStack {
                 // Background
-                Color(.systemBackground)
+                GradientBackground()
                     .ignoresSafeArea()
                 
                 if runHistory.isEmpty {
@@ -49,14 +49,15 @@ struct RunHistoryView: View {
         VStack(spacing: 16) {
             Image(systemName: "figure.run")
                 .font(.bebasNeueExtraLarge)
-                .foregroundColor(.secondary)
+                .foregroundColor(.white.opacity(0.3))
             
             Text("No Workouts Yet")
                 .font(.bebasNeueTitle)
+                .foregroundColor(.white)
             
             Text("Complete your first workout to see it here.")
                 .font(.bebasNeueSubheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(.white.opacity(0.7))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
         }
@@ -86,12 +87,13 @@ struct RunHistoryCard: View {
             HStack {
                 Text(workout.formattedDate)
                     .font(.bebasNeueSubheadline)
+                    .foregroundColor(.white)
                 
                 Spacer()
                 
                 Text(workout.formattedDuration)
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.white.opacity(0.7))
             }
             
             // Stats row
@@ -124,10 +126,7 @@ struct RunHistoryCard: View {
             }
         }
         .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.secondarySystemBackground))
-        )
+        .glassCardStyle()
     }
 }
 
@@ -148,10 +147,11 @@ struct StatBadge: View {
             
             Text(value)
                 .font(.bebasNeueCaption)
+                .foregroundColor(.white)
             
             Text(label)
                 .font(.bebasNeueCaptionSmall)
-                .foregroundColor(.secondary)
+                .foregroundColor(.white.opacity(0.6))
         }
     }
 }

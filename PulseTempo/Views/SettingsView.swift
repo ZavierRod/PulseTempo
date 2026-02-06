@@ -23,129 +23,151 @@ struct SettingsView: View {
     
     var body: some View {
         NavigationView {
-            List {
-                // Wearable Device Section
-                Section {
-                    HStack {
-                        Image(systemName: deviceManager.selectedDevice.iconName)
-                            .foregroundColor(deviceManager.selectedDevice.color)
-                            .frame(width: 30)
-                        
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Heart Rate Device")
-                                .font(.bebasNeueSubheadline)
-                                .foregroundColor(.secondary)
+            ZStack {
+                GradientBackground()
+                
+                List {
+                    // Wearable Device Section
+                    Section {
+                        HStack {
+                            Image(systemName: deviceManager.selectedDevice.iconName)
+                                .foregroundColor(deviceManager.selectedDevice.color)
+                                .frame(width: 30)
                             
-                            Text(deviceManager.selectedDevice.rawValue)
-                                .font(.bebasNeueBody)
-                        }
-                        
-                        Spacer()
-                        
-                        Button("Change") {
-                            showingDevicePicker = true
-                        }
-                        .buttonStyle(.bordered)
-                    }
-                    .padding(.vertical, 8)
-                    
-                    // Device Status
-                    HStack {
-                        Image(systemName: deviceManager.isDeviceConfigured() ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                            .foregroundColor(deviceManager.isDeviceConfigured() ? .green : .orange)
-                        
-                        Text(deviceManager.getDeviceStatusMessage())
-                            .font(.bebasNeueCaption)
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    // Setup Instructions for Garmin
-                    if deviceManager.selectedDevice == .garminVenu3S {
-                        Button(action: {
-                            showingSetupInstructions.toggle()
-                        }) {
-                            HStack {
-                                Image(systemName: "info.circle")
-                                Text("Setup Instructions")
-                                Spacer()
-                                Image(systemName: showingSetupInstructions ? "chevron.up" : "chevron.down")
-                            }
-                        }
-                        .foregroundColor(.blue)
-                        
-                        if showingSetupInstructions {
-                            VStack(alignment: .leading, spacing: 8) {
-                                ForEach(Array(deviceManager.selectedDevice.setupInstructions.enumerated()), id: \.offset){ index, instruction in
-                                    HStack(alignment: .top, spacing: 8) {
-                                        Text("\(index + 1).")
-                                            .font(.bebasNeueCaption)
-                                            .foregroundColor(.secondary)
-                                        Text(instruction)
-                                            .font(.bebasNeueCaption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Heart Rate Device")
+                                    .font(.bebasNeueSubheadline)
+                                    .foregroundColor(.white.opacity(0.7))
                                 
-                                if let appStoreURL = deviceManager.selectedDevice.externalAppStoreURL {
-                                    Link(destination: appStoreURL) {
-                                        HStack {
-                                            Image(systemName: "arrow.down.circle.fill")
-                                            Text("Download Garmin Connect")
-                                        }
-                                        .font(.caption.bold())
-                                    }
-                                    .padding(.top, 4)
+                                Text(deviceManager.selectedDevice.rawValue)
+                                    .font(.bebasNeueBody)
+                                    .foregroundColor(.white)
+                            }
+                            
+                            Spacer()
+                            
+                            Button("Change") {
+                                showingDevicePicker = true
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                        .padding(.vertical, 8)
+                        .listRowBackground(Color.white.opacity(0.1))
+                        
+                        // Device Status
+                        HStack {
+                            Image(systemName: deviceManager.isDeviceConfigured() ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                                .foregroundColor(deviceManager.isDeviceConfigured() ? .green : .orange)
+                            
+                            Text(deviceManager.getDeviceStatusMessage())
+                                .font(.bebasNeueCaption)
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+                        .listRowBackground(Color.white.opacity(0.1))
+                        
+                        // Setup Instructions for Garmin
+                        if deviceManager.selectedDevice == .garminVenu3S {
+                            Button(action: {
+                                showingSetupInstructions.toggle()
+                            }) {
+                                HStack {
+                                    Image(systemName: "info.circle")
+                                    Text("Setup Instructions")
+                                    Spacer()
+                                    Image(systemName: showingSetupInstructions ? "chevron.up" : "chevron.down")
                                 }
                             }
-                            .padding(.vertical, 4)
+                            .foregroundColor(.blue)
+                            .listRowBackground(Color.white.opacity(0.1))
+                            
+                            if showingSetupInstructions {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    ForEach(Array(deviceManager.selectedDevice.setupInstructions.enumerated()), id: \.offset) { index, instruction in
+                                        HStack(alignment: .top, spacing: 8) {
+                                            Text("\(index + 1).")
+                                                .font(.bebasNeueCaption)
+                                                .foregroundColor(.secondary)
+                                            Text(instruction)
+                                                .font(.bebasNeueCaption)
+                                                .foregroundColor(.white.opacity(0.7))
+                                        }
+                                    }
+                                    
+                                    if let appStoreURL = deviceManager.selectedDevice.externalAppStoreURL {
+                                        Link(destination: appStoreURL) {
+                                            HStack {
+                                                Image(systemName: "arrow.down.circle.fill")
+                                                Text("Download Garmin Connect")
+                                            }
+                                            .font(.caption.bold())
+                                        }
+                                        .padding(.top, 4)
+                                    }
+                                }
+                                .padding(.vertical, 4)
+                                .listRowBackground(Color.white.opacity(0.1))
+                            }
                         }
-                    }
-                } header: {
-                    Text("Wearable Device")
-                } footer: {
-                    Text("Select which device you'll use for heart rate monitoring during workouts. Expected latency: \(deviceManager.selectedDevice.expectedLatency)")
-                }
-                
-                // BPM Matching Section (Placeholder for future settings)
-                Section {
-                    HStack {
-                        Text("BPM Tolerance")
-                        Spacer()
-                        Text("±5 BPM")
-                            .foregroundColor(.secondary)
+                    } header: {
+                        Text("Wearable Device")
+                            .foregroundColor(.white.opacity(0.8))
+                    } footer: {
+                        Text("Select which device you'll use for heart rate monitoring during workouts. Expected latency: \(deviceManager.selectedDevice.expectedLatency)")
+                            .foregroundColor(.white.opacity(0.6))
                     }
                     
-                    HStack {
-                        Text("Matching Algorithm")
-                        Spacer()
-                        Text("Smart")
-                            .foregroundColor(.secondary)
-                    }
-                } header: {
-                    Text("BPM Matching")
-                } footer: {
-                    Text("Configure how the app matches music to your heart rate")
-                }
-                
-                // About Section
-                Section {
-                    HStack {
-                        Text("Version")
-                        Spacer()
-                        Text("1.0.0")
-                            .foregroundColor(.secondary)
+                    // BPM Matching Section (Placeholder for future settings)
+                    Section {
+                        HStack {
+                            Text("BPM Tolerance")
+                                .foregroundColor(.white)
+                            Spacer()
+                            Text("±5 BPM")
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+                        .listRowBackground(Color.white.opacity(0.1))
+                        
+                        HStack {
+                            Text("Matching Algorithm")
+                            Spacer()
+                            Text("Smart")
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+                        .listRowBackground(Color.white.opacity(0.1))
+                    } header: {
+                        Text("BPM Matching")
+                            .foregroundColor(.white.opacity(0.8))
+                    } footer: {
+                        Text("Configure how the app matches music to your heart rate")
+                            .foregroundColor(.white.opacity(0.6))
                     }
                     
-                    Button("Privacy Policy") {
-                        // TODO: Open privacy policy
+                    // About Section
+                    Section {
+                        HStack {
+                            Text("Version")
+                                .foregroundColor(.white)
+                            Spacer()
+                            Text("1.0.0")
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+                        .listRowBackground(Color.white.opacity(0.1))
+                        
+                        Button("Privacy Policy") {
+                            // TODO: Open privacy policy
+                        }
+                        .listRowBackground(Color.white.opacity(0.1))
+                        
+                        Button("Terms of Service") {
+                            // TODO: Open terms
+                        }
+                        .listRowBackground(Color.white.opacity(0.1))
+                    } header: {
+                        Text("About")
+                            .foregroundColor(.white.opacity(0.8))
                     }
-                    
-                    Button("Terms of Service") {
-                        // TODO: Open terms
-                    }
-                } header: {
-                    Text("About")
                 }
+                .scrollContentBackground(.hidden)
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
@@ -156,15 +178,15 @@ struct SettingsView: View {
                     }
                 }
             }
-            .sheet(isPresented: $showingDevicePicker) {
-                DevicePickerSheet(
-                    currentDevice: deviceManager.selectedDevice,
-                    onSelect: { device in
-                        deviceManager.selectDevice(device)
-                        showingDevicePicker = false
-                    }
-                )
-            }
+        }
+        .sheet(isPresented: $showingDevicePicker) {
+            DevicePickerSheet(
+                currentDevice: deviceManager.selectedDevice,
+                onSelect: { device in
+                    deviceManager.selectDevice(device)
+                    showingDevicePicker = false
+                }
+            )
         }
     }
 }
@@ -186,37 +208,43 @@ private struct DevicePickerSheet: View {
     
     var body: some View {
         NavigationView {
-            List {
-                ForEach(WearableDevice.allCases) { device in
-                    Button(action: {
-                        selectedDevice = device
-                    }) {
-                        HStack {
-                            Image(systemName: device.iconName)
-                                .foregroundColor(device.color)
-                                .frame(width: 30)
-                            
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(device.rawValue)
-                                    .font(.bebasNeueBody)
-                                    .foregroundColor(.primary)
+            ZStack {
+                GradientBackground()
+                
+                List {
+                    ForEach(WearableDevice.allCases) { device in
+                        Button(action: {
+                            selectedDevice = device
+                        }) {
+                            HStack {
+                                Image(systemName: device.iconName)
+                                    .foregroundColor(device.color)
+                                    .frame(width: 30)
                                 
-                                Text(device.description)
-                                    .font(.bebasNeueCaption)
-                                    .foregroundColor(.secondary)
-                            }
-                            
-                            Spacer()
-                            
-                            if selectedDevice == device {
-                                Image(systemName: "checkmark")
-                                    .foregroundColor(.blue)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(device.rawValue)
+                                        .font(.bebasNeueBody)
+                                        .foregroundColor(.white)
+                                    
+                                    Text(device.description)
+                                        .font(.bebasNeueCaption)
+                                        .foregroundColor(.white.opacity(0.7))
+                                }
+                                
+                                Spacer()
+                                
+                                if selectedDevice == device {
+                                    Image(systemName: "checkmark")
+                                        .foregroundColor(.blue)
+                                }
                             }
                         }
                     }
                     .buttonStyle(.plain)
+                    .listRowBackground(Color.white.opacity(0.1))
                 }
             }
+            .scrollContentBackground(.hidden)
             .navigationTitle("Select Device")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

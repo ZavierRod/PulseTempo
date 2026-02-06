@@ -39,15 +39,7 @@ struct HomeView: View {
         NavigationStack {
             ZStack {
                 // Background gradient
-                LinearGradient(
-                    gradient: Gradient(colors: [
-                        Color(red: 0.95, green: 0.97, blue: 1.0),
-                        Color(red: 0.90, green: 0.95, blue: 1.0)
-                    ]),
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
+                GradientBackground()
                 
                 ScrollView {
                     VStack(spacing: 24) {
@@ -81,7 +73,7 @@ struct HomeView: View {
                         }
                     } label: {
                         Image(systemName: "gear")
-                            .foregroundColor(.black)
+                            .foregroundColor(.white)
                     }
                 }
             }
@@ -182,12 +174,12 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Ready to Work Out")
                     .font(.bebasNeueMedium)
-                    .foregroundColor(.black)
+                    .foregroundColor(.white)
                 
                 if viewModel.totalTrackCount > 0 {
                     Text("\(viewModel.totalTrackCount) songs ready")
                         .font(.bebasNeueSubheadline)
-                        .foregroundColor(.gray)
+                        .foregroundColor(.white.opacity(0.7))
                 }
             }
             
@@ -262,11 +254,7 @@ struct HomeView: View {
             }
         }
         .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(Color.white.opacity(0.8))
-                .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 4)
-        )
+        .glassCardStyle()
     }
     
     // MARK: - Workout Mode Selector
@@ -276,7 +264,7 @@ struct HomeView: View {
         VStack(spacing: 8) {
             Text("Match Music To")
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.secondary)
+                .foregroundColor(.white.opacity(0.7))
             
             HStack(spacing: 12) {
                 // Heart Rate Mode Button
@@ -305,7 +293,7 @@ struct HomeView: View {
             HStack {
                 Text("Your Playlists")
                     .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(.primary)
+                    .foregroundColor(.white)
                 
                 Spacer()
                 
@@ -318,7 +306,7 @@ struct HomeView: View {
                         Image(systemName: "pencil")
                             .font(.system(size: 13))
                     }
-                    .foregroundColor(.blue)
+                    .foregroundColor(.blue) // Keep accent color or change to pink/purple? Blue is fine for action
                 }
             }
             
@@ -340,11 +328,7 @@ struct HomeView: View {
             }
         }
         .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(Color.white.opacity(0.8))
-                .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 4)
-        )
+        .glassCardStyle()
     }
     
     // MARK: - Empty Playlists View
@@ -357,11 +341,11 @@ struct HomeView: View {
             
             Text("No Playlists Selected")
                 .font(.bebasNeueTitle)
-                .foregroundColor(.primary)
+                .foregroundColor(.white)
             
             Text("Add playlists to get started")
                 .font(.bebasNeueSubheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(.white.opacity(0.7))
             
             Button(action: {
                 showingPlaylistSelection = true
@@ -389,7 +373,7 @@ struct HomeView: View {
                 HStack {
                     Text("Last Workout")
                         .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(.primary)
+                        .foregroundColor(.white)
                     
                     Spacer()
                     
@@ -404,7 +388,7 @@ struct HomeView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(workout.formattedDate)
                             .font(.bebasNeueSubheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.white.opacity(0.7))
                         
                         HStack(spacing: 12) {
                             Label("\(workout.formattedDuration)", systemImage: "clock")
@@ -414,26 +398,22 @@ struct HomeView: View {
                             }
                         }
                         .font(.bebasNeueCaption)
-                        .foregroundColor(.primary)
+                        .foregroundColor(.white)
                     }
                     
                     Spacer()
                     
                     Image(systemName: "chevron.right")
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.white.opacity(0.5))
                 }
                 .padding(16)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.blue.opacity(0.1))
+                        .fill(Color.blue.opacity(0.1)) // Keep subtle blue tint for inner card
                 )
             }
             .padding(20)
-            .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(Color.white.opacity(0.8))
-                    .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 4)
-            )
+            .glassCardStyle()
         }
         .buttonStyle(PlainButtonStyle())
     }
@@ -542,17 +522,17 @@ struct WorkoutModeButton: View {
                 
                 Text(mode.description)
                     .font(.system(size: 10))
-                    .foregroundColor(isSelected ? modeColor.opacity(0.8) : .secondary)
+                    .foregroundColor(isSelected ? modeColor.opacity(0.8) : .white.opacity(0.7))
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
             }
-            .foregroundColor(isSelected ? modeColor : .secondary)
+            .foregroundColor(isSelected ? modeColor : .white.opacity(0.7))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
             .padding(.horizontal, 8)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(isSelected ? modeColor.opacity(0.15) : Color.gray.opacity(0.1))
+                    .fill(isSelected ? modeColor.opacity(0.15) : Color.white.opacity(0.05))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12)

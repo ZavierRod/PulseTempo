@@ -16,6 +16,9 @@ struct ActiveRunView: View {
     
     @Environment(\.dismiss) private var dismiss
     @StateObject private var runSessionVM: RunSessionViewModel
+    @State private var showingQuitConfirmation = false
+    @State private var showingControlsSheet = false
+    @State private var isAnimatingChevron = false
     
     // MARK: - Initialization
     
@@ -52,9 +55,41 @@ struct ActiveRunView: View {
                 
                 // Playback controls
                 controlsSection
-                    .padding(.bottom, 40)
+                    .padding(.bottom, 20)
+                
+                // Swipe up indicator
+                VStack(spacing: 4) {
+                    Image(systemName: "chevron.compact.up")
+                        .font(.custom("BebasNeue-Regular", size: 24))
+                        .foregroundColor(.white.opacity(0.7))
+                        .offset(y: isAnimatingChevron ? -5 : 0)
+                        .animation(
+                            Animation.easeInOut(duration: 1.0)
+                                .repeatForever(autoreverses: true),
+                            value: isAnimatingChevron
+                        )
+                    
+                    Text("SWIPE UP FOR CONTROLS")
+                        .font(.custom("BebasNeue-Regular", size: 14))
+                        .foregroundColor(.white.opacity(0.5))
+                        .tracking(1)
+                }
+                .padding(.bottom, 20)
+                .onAppear {
+                    isAnimatingChevron = true
+                }
             }
         }
+        .contentShape(Rectangle()) // Make entire area tappable/swipable
+        .gesture(
+            DragGesture(minimumDistance: 20, coordinateSpace: .local)
+                .onEnded { value in
+                    if value.translation.height < 0 {
+                        // Swipe up
+                        showingControlsSheet = true
+                    }
+                }
+        )
         .onAppear {
             runSessionVM.startRun()
         }
@@ -79,6 +114,99 @@ struct ActiveRunView: View {
                 }
             )
         }
+        // Workout Controls Sheet
+        .sheet(isPresented: $showingControlsSheet) {
+            VStack(spacing: 20) {
+                // Handle indicator
+                Capsule()
+                    .fill(Color.gray.opacity(0.3))
+                    .frame(width: 40, height: 5)
+                    .padding(.top, 10)
+                
+                Text("WORKOUT CONTROLS")
+                    .font(.custom("BebasNeue-Regular", size: 24))
+                    .foregroundColor(.primary)
+                    .padding(.bottom, 10)
+                
+                // Finish Button (Main Action)
+                Button(action: {
+                    showingControlsSheet = false
+                    runSessionVM.finishRun()
+                }) {
+                    HStack {
+                        Image(systemName: "flag.checkered")
+                        Text("FINISH WORKOUT")
+                    }
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.green)
+                    .cornerRadius(12)
+                }
+                
+                // Pause/Resume Button
+                Button(action: {
+                    runSessionVM.togglePlayPause()
+                    // Keep sheet open so they can see status change, or close it?
+                    // Usually better to keep open or show status
+                    showingControlsSheet = false
+                }) {
+                    HStack {
+                        Image(systemName: runSessionVM.isPlaying ? "pause.fill" : "play.fill")
+                        Text(runSessionVM.isPlaying ? "PAUSE WORKOUT" : "RESUME WORKOUT")
+                    }
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.yellow) // Or gray/orange depending on design
+                    .cornerRadius(12)
+                }
+                
+                // Quit Button (Destructive)
+                Button(action: {
+                    showingControlsSheet = false
+                    // Small delay to allow sheet to dismiss before showing alert
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        showingQuitConfirmation = true
+                    }
+                }) {
+                    HStack {
+                        Image(systemName: "xmark.circle.fill")
+                        Text("QUIT WORKOUT")
+                    }
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.red)
+                    .cornerRadius(12)
+                }
+                
+                Spacer()
+                
+                // Close Sheet Button
+                Button("Dismiss") {
+                    showingControlsSheet = false
+                }
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .padding(.bottom, 20)
+            }
+            .padding(.horizontal)
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.hidden) // We made our own handle if we want, or use system one using .visible
+        }
+        .alert("Quit Workout?", isPresented: $showingQuitConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Quit", role: .destructive) {
+                runSessionVM.discardRun()
+                dismiss()
+            }
+        } message: {
+            Text("This will discard your workout. Are you sure?")
+        }
     }
     
     // MARK: - Background
@@ -100,13 +228,15 @@ struct ActiveRunView: View {
     
     private var topBar: some View {
         HStack {
-            // Close button
-            Button(action: {
-                runSessionVM.finishRun()
-            }) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.title)
-                    .foregroundColor(.white.opacity(0.7))
+            // Run mode indicator (restored)
+            VStack(spacing: 2) {
+                Text("MODE")
+                    .font(.caption2)
+                    .foregroundColor(.white.opacity(0.6))
+                Text(runSessionVM.runMode.displayName)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.white)
             }
             
             Spacer()
@@ -124,15 +254,14 @@ struct ActiveRunView: View {
             
             Spacer()
             
-            // Run mode indicator
+            // Empty view for symmetry
             VStack(spacing: 2) {
                 Text("MODE")
                     .font(.caption2)
-                    .foregroundColor(.white.opacity(0.6))
+                    .foregroundColor(.clear)
                 Text(runSessionVM.runMode.displayName)
                     .font(.caption)
-                    .fontWeight(.medium)
-                    .foregroundColor(.white)
+                    .foregroundColor(.clear)
             }
         }
         .padding(.horizontal, 20)
