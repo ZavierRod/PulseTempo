@@ -157,12 +157,8 @@ class MusicService: ObservableObject, MusicServiceProtocol {
     /// This should be called during app initialization to ensure permission is granted
     /// before BPM analysis is attempted.
     func warmUpLocalNetworkPermission() {
-        #if targetEnvironment(simulator)
-        let host = "http://localhost:8000"
-        #else
-        // Use Mac's local IP for physical device testing
-        let host = "http://192.168.1.40:8000"
-        #endif
+        // Use Railway production backend
+        let host = "https://pulsetempo-production.up.railway.app"
         
         guard let url = URL(string: "\(host)/api/health") else {
             // Fallback: try the analyze endpoint with a simple GET (will fail but triggers permission)
@@ -762,13 +758,8 @@ class MusicService: ObservableObject, MusicServiceProtocol {
     
     /// Analyze BPM for a track using backend
     private func analyzeTrackBPM(track: Track, previewUrl: String) async {
-        // Determine host based on environment
-        #if targetEnvironment(simulator)
-        let host = "http://localhost:8000"
-        #else
-        // Use Mac's local IP for physical device testing
-        let host = "http://192.168.1.40:8000"
-        #endif
+        // Use Railway production backend
+        let host = "https://pulsetempo-production.up.railway.app"
         
         guard let url = URL(string: "\(host)/api/tracks/analyze") else { return }
         
