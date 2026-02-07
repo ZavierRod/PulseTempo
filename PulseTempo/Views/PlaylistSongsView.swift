@@ -81,7 +81,7 @@ struct PlaylistSongsView: View {
                             Text("Back")
                                 .font(.bebasNeueBodySmall)
                         }
-                        .foregroundColor(.blue)
+                        .foregroundColor(.red)
                     }
                 }
                 
@@ -146,7 +146,7 @@ struct PlaylistSongsView: View {
         VStack(spacing: 16) {
             ProgressView()
                 .scaleEffect(1.5)
-                .tint(.blue)
+                .tint(.red)
             
             Text("Loading songs...")
                 .font(.bebasNeueSubheadline)
@@ -318,12 +318,12 @@ struct TrackRow: View {
     private var artworkPlaceholder: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 8)
-                .fill(Color.blue.opacity(0.1))
+                .fill(Color.red.opacity(0.1))
                 .frame(width: 50, height: 50)
             
             Image(systemName: "music.note")
                 .font(.system(size: 20))
-                .foregroundColor(.blue)
+                .foregroundColor(.red)
         }
     }
     

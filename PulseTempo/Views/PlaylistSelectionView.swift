@@ -132,7 +132,7 @@ struct PlaylistSelectionView: View {
         VStack(spacing: 16) {
             ProgressView()
                 .scaleEffect(1.5)
-                .tint(.blue)
+                .tint(.red)
             
             Text("Loading playlists...")
                 .font(.bebasNeueSubheadline)
@@ -226,13 +226,13 @@ struct PlaylistSelectionView: View {
                         .padding(.vertical, 12)
                         .background(
                             LinearGradient(
-                                colors: [Color.blue, Color.purple],
+                                colors: [Color.pink, Color.red],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
                         )
                         .cornerRadius(12)
-                        .shadow(color: .blue.opacity(0.3), radius: 8, x: 0, y: 4)
+                        .shadow(color: .red.opacity(0.3), radius: 8, x: 0, y: 4)
                 }
             }
             .padding(.horizontal, 20)
@@ -256,7 +256,7 @@ struct PlaylistSelectionView: View {
                 // Animated music waveform icon
                 Image(systemName: "waveform.circle.fill")
                     .font(.bebasNeueExtraLarge)
-                    .foregroundColor(.blue)
+                    .foregroundColor(.red)
                     .symbolEffect(.pulse, options: .repeating)
                 
                 Text("Analyzing BPM")
@@ -322,11 +322,11 @@ struct PlaylistCard: View {
             Button(action: onToggleSelection) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 8)
-                        .stroke(isSelected ? Color.blue : Color.gray.opacity(0.3), lineWidth: 2)
+                        .stroke(isSelected ? Color.red : Color.gray.opacity(0.3), lineWidth: 2)
                         .frame(width: 24, height: 24)
                         .background(
                             RoundedRectangle(cornerRadius: 8)
-                                .fill(isSelected ? Color.blue : Color.clear)
+                                .fill(isSelected ? Color.red : Color.clear)
                         )
                     
                     if isSelected {

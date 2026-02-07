@@ -8,22 +8,15 @@
 import SwiftUI
 
 /// Home screen dashboard - central hub before starting workouts
-/// Features Quick Start area and Playlist Management
 struct HomeView: View {
     
     // MARK: - Properties
     
-    @StateObject private var viewModel = HomeViewModel()
-    @StateObject private var authService = AuthService.shared
+    @ObservedObject var viewModel: HomeViewModel
     @ObservedObject private var connectivityManager = WatchConnectivityManager.shared
-    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     
     /// Navigation state
     @State private var showingActiveRun = false
-    @State private var showingPlaylistSelection = false
-    @State private var selectedPlaylistForViewing: MusicPlaylist?
-    @State private var showingRunHistory = false
-    @State private var showingSignOutAlert = false
     
     /// Workout tracks state
     @State private var workoutTracks: [Track] = []
@@ -43,14 +36,18 @@ struct HomeView: View {
                 
                 ScrollView {
                     VStack(spacing: 24) {
+                        // Logo at top
+                        InSyncLogo(size: .medium)
+                            .padding(.top, 8)
+                        
                         // Header
                         headerSection
                         
                         // Quick Start Area
                         quickStartSection
                         
-                        // Playlist Management
-                        playlistManagementSection
+                        // Selected Playlists Summary
+                        playlistSummarySection
                         
                         // Last Workout (if available)
                         if let lastWorkout = viewModel.lastWorkout {
@@ -61,56 +58,13 @@ struct HomeView: View {
                     .padding(.vertical, 16)
                 }
             }
-            .navigationTitle("inSync")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Menu {
-                        Button(role: .destructive, action: {
-                            showingSignOutAlert = true
-                        }) {
-                            Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
-                        }
-                    } label: {
-                        Image(systemName: "gear")
-                            .foregroundColor(.white)
-                    }
-                }
-            }
-            .alert("Sign Out", isPresented: $showingSignOutAlert) {
-                Button("Cancel", role: .cancel) { }
-                Button("Sign Out", role: .destructive) {
-                    authService.logout()
-                    hasCompletedOnboarding = false
-                }
-            } message: {
-                Text("Are you sure you want to sign out?")
-            }
+            .navigationBarHidden(true)
             .fullScreenCover(isPresented: $showingActiveRun) {
                 ActiveRunView(tracks: workoutTracks, runMode: selectedRunMode)
-            }
-            .sheet(isPresented: $showingPlaylistSelection) {
-                PlaylistSelectionView { tracks in
-                    // Handle playlist selection
-                    print("✅ Selected \(tracks.count) tracks from playlists")
-                    showingPlaylistSelection = false
-                    viewModel.refreshPlaylists()
-                }
-            }
-            .sheet(item: $selectedPlaylistForViewing) { playlist in
-                PlaylistSongsView(
-                    playlist: playlist,
-                    onDismiss: {
-                        selectedPlaylistForViewing = nil
-                    }
-                )
             }
             .onAppear {
                 viewModel.refreshPlaylists()
                 viewModel.refreshRunHistory()
-            }
-            .sheet(isPresented: $showingRunHistory) {
-                RunHistoryView(runHistory: viewModel.runHistory)
             }
             .overlay {
                 // Waiting for Watch overlay
@@ -222,14 +176,14 @@ struct HomeView: View {
                 .background(
                     LinearGradient(
                         colors: selectedRunMode == .cadenceMatching
-                            ? [Color.cyan, Color.blue]
-                            : [Color.blue, Color.purple],
+                            ? [Color.cyan, Color.teal]
+                            : [Color.pink, Color.red],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
                 )
                 .cornerRadius(16)
-                .shadow(color: .blue.opacity(0.3), radius: 12, x: 0, y: 6)
+                .shadow(color: .red.opacity(0.3), radius: 12, x: 0, y: 6)
             }
             .disabled(isLoadingTracks)
             
@@ -247,7 +201,7 @@ struct HomeView: View {
                         InfoPill(
                             icon: "music.note",
                             text: "\(viewModel.totalTrackCount) songs",
-                            color: .blue
+                            color: .red
                         )
                     }
                 }
@@ -285,44 +239,43 @@ struct HomeView: View {
         .padding(.bottom, 8)
     }
     
-    // MARK: - Playlist Management Section
+    // MARK: - Playlist Summary Section
     
-    private var playlistManagementSection: some View {
-        VStack(spacing: 16) {
-            // Section header
+    private var playlistSummarySection: some View {
+        VStack(spacing: 12) {
             HStack {
                 Text("Your Playlists")
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(.white)
                 
                 Spacer()
-                
-                Button(action: {
-                    showingPlaylistSelection = true
-                }) {
-                    HStack(spacing: 4) {
-                        Text("Manage")
-                            .font(.system(size: 15, weight: .semibold))
-                        Image(systemName: "pencil")
-                            .font(.system(size: 13))
-                    }
-                    .foregroundColor(.blue) // Keep accent color or change to pink/purple? Blue is fine for action
-                }
             }
             
-            // Playlist cards
             if viewModel.isLoading {
                 ProgressView()
                     .scaleEffect(1.2)
-                    .padding(.vertical, 40)
+                    .padding(.vertical, 20)
             } else if viewModel.selectedPlaylists.isEmpty {
-                emptyPlaylistsView
+                HStack(spacing: 12) {
+                    Image(systemName: "music.note.list")
+                        .font(.system(size: 24))
+                        .foregroundColor(.gray.opacity(0.5))
+                    
+                    Text("No playlists selected — go to Playlists tab")
+                        .font(.bebasNeueSubheadline)
+                        .foregroundColor(.white.opacity(0.7))
+                }
+                .padding(.vertical, 16)
             } else {
-                VStack(spacing: 12) {
-                    ForEach(viewModel.selectedPlaylists) { playlist in
-                        PlaylistOverviewCard(playlist: playlist) {
-                            selectedPlaylistForViewing = playlist
-                        }
+                VStack(spacing: 8) {
+                    ForEach(viewModel.selectedPlaylists.prefix(3)) { playlist in
+                        PlaylistOverviewCard(playlist: playlist) { }
+                    }
+                    
+                    if viewModel.selectedPlaylists.count > 3 {
+                        Text("+\(viewModel.selectedPlaylists.count - 3) more")
+                            .font(.bebasNeueCaption)
+                            .foregroundColor(.white.opacity(0.6))
                     }
                 }
             }
@@ -331,91 +284,45 @@ struct HomeView: View {
         .glassCardStyle()
     }
     
-    // MARK: - Empty Playlists View
-    
-    private var emptyPlaylistsView: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "music.note.list")
-                .font(.bebasNeueLarge)
-                .foregroundColor(.gray.opacity(0.5))
-            
-            Text("No Playlists Selected")
-                .font(.bebasNeueTitle)
-                .foregroundColor(.white)
-            
-            Text("Add playlists to get started")
-                .font(.bebasNeueSubheadline)
-                .foregroundColor(.white.opacity(0.7))
-            
-            Button(action: {
-                showingPlaylistSelection = true
-            }) {
-                Text("Add Playlists")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
-                    .background(Color.blue)
-                    .cornerRadius(10)
-            }
-            .padding(.top, 8)
-        }
-        .padding(.vertical, 30)
-    }
-    
     // MARK: - Last Workout Section
     
     private func lastWorkoutSection(_ workout: WorkoutSummary) -> some View {
-        Button(action: {
-            showingRunHistory = true
-        }) {
-            VStack(spacing: 12) {
-                HStack {
-                    Text("Last Workout")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(.white)
+        VStack(spacing: 12) {
+            HStack {
+                Text("Last Workout")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.white)
+                
+                Spacer()
+            }
+            
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(workout.formattedDate)
+                        .font(.bebasNeueSubheadline)
+                        .foregroundColor(.white.opacity(0.7))
                     
-                    Spacer()
-                    
-                    if viewModel.runHistory.count > 1 {
-                        Text("See All (\(viewModel.runHistory.count))")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.blue)
+                    HStack(spacing: 12) {
+                        Label("\(workout.formattedDuration)", systemImage: "clock")
+                        Label("\(workout.averageBPM) BPM", systemImage: "heart.fill")
+                        if workout.averageCadence > 0 {
+                            Label("\(workout.averageCadence) SPM", systemImage: "figure.run")
+                        }
                     }
+                    .font(.bebasNeueCaption)
+                    .foregroundColor(.white)
                 }
                 
-                HStack(spacing: 16) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(workout.formattedDate)
-                            .font(.bebasNeueSubheadline)
-                            .foregroundColor(.white.opacity(0.7))
-                        
-                        HStack(spacing: 12) {
-                            Label("\(workout.formattedDuration)", systemImage: "clock")
-                            Label("\(workout.averageBPM) BPM", systemImage: "heart.fill")
-                            if workout.averageCadence > 0 {
-                                Label("\(workout.averageCadence) SPM", systemImage: "figure.run")
-                            }
-                        }
-                        .font(.bebasNeueCaption)
-                        .foregroundColor(.white)
-                    }
-                    
-                    Spacer()
-                    
-                    Image(systemName: "chevron.right")
-                        .foregroundColor(.white.opacity(0.5))
-                }
-                .padding(16)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.blue.opacity(0.1)) // Keep subtle blue tint for inner card
-                )
+                Spacer()
             }
-            .padding(20)
-            .glassCardStyle()
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.red.opacity(0.1))
+            )
         }
-        .buttonStyle(PlainButtonStyle())
+        .padding(20)
+        .glassCardStyle()
     }
     
     // MARK: - Helper Methods
@@ -548,7 +455,7 @@ struct WorkoutModeButton: View {
 #if DEBUG
 struct HomeView_Previews: PreviewProvider {
     static var previews: some View {
-        HomeView()
+        HomeView(viewModel: HomeViewModel())
     }
 }
 #endif

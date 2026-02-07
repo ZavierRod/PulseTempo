@@ -12,20 +12,18 @@ struct RunHistoryView: View {
     
     // MARK: - Properties
     
-    let runHistory: [WorkoutSummary]
-    
-    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var viewModel: HomeViewModel
     
     // MARK: - Body
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 // Background
                 GradientBackground()
                     .ignoresSafeArea()
                 
-                if runHistory.isEmpty {
+                if viewModel.runHistory.isEmpty {
                     emptyState
                 } else {
                     runList
@@ -33,12 +31,8 @@ struct RunHistoryView: View {
             }
             .navigationTitle("Workout History")
             .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
+            .onAppear {
+                viewModel.refreshRunHistory()
             }
         }
     }
@@ -66,7 +60,7 @@ struct RunHistoryView: View {
     private var runList: some View {
         ScrollView {
             LazyVStack(spacing: 12) {
-                ForEach(runHistory) { workout in
+                ForEach(viewModel.runHistory) { workout in
                     RunHistoryCard(workout: workout)
                 }
             }
@@ -111,7 +105,7 @@ struct RunHistoryCard: View {
                     icon: "figure.run",
                     value: "\(workout.averageCadence)",
                     label: "SPM",
-                    color: .blue
+                    color: .cyan
                 )
                 
                 // Duration
@@ -161,32 +155,7 @@ struct StatBadge: View {
 #if DEBUG
 struct RunHistoryView_Previews: PreviewProvider {
     static var previews: some View {
-        RunHistoryView(runHistory: [
-            WorkoutSummary(
-                id: "1",
-                date: Date(),
-                durationMinutes: 32,
-                averageBPM: 145,
-                averageCadence: 165,
-                songsPlayed: 8
-            ),
-            WorkoutSummary(
-                id: "2",
-                date: Date().addingTimeInterval(-86400),
-                durationMinutes: 45,
-                averageBPM: 138,
-                averageCadence: 158,
-                songsPlayed: 12
-            ),
-            WorkoutSummary(
-                id: "3",
-                date: Date().addingTimeInterval(-172800),
-                durationMinutes: 28,
-                averageBPM: 152,
-                averageCadence: 170,
-                songsPlayed: 6
-            )
-        ])
+        RunHistoryView(viewModel: HomeViewModel())
     }
 }
 #endif

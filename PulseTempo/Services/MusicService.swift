@@ -767,6 +767,13 @@ class MusicService: ObservableObject, MusicServiceProtocol {
             self.analyzingTrackCount += 1
         }
         
+        // Use defer to guarantee analyzingTrackCount is decremented even on early returns
+        defer {
+            Task { @MainActor in
+                self.analyzingTrackCount -= 1
+            }
+        }
+        
         print("🔍 Analyzing BPM for track \(track.id)...")
         
         var request = URLRequest(url: url)
@@ -833,10 +840,6 @@ class MusicService: ObservableObject, MusicServiceProtocol {
             }
         } catch {
             print("❌ BPM Analysis failed: \(error.localizedDescription)")
-        }
-        
-        await MainActor.run {
-            self.analyzingTrackCount -= 1
         }
     }
     

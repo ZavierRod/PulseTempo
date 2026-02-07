@@ -29,7 +29,7 @@ struct InSyncLogo: View {
             .resizable()
             .aspectRatio(contentMode: .fit)
             .frame(width: size.width)
-            .offset(x: size.width * 0.04) // Compensate for heart on left side
+            .offset(x: size.width * 0.06) // Compensate for heart on left side
     }
 }
 
@@ -43,7 +43,7 @@ struct InSyncLogo: View {
 #Preview("Large") {
     ZStack {
         GradientBackground()
-        InSyncLogo(size: .large)
+        InSyncLogo(size: .xLarge)
     }
 }
 

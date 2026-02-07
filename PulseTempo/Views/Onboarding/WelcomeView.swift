@@ -32,7 +32,8 @@ struct WelcomeView: View {
                 
                 // App Logo
                 InSyncLogo(size: .large)
-                    .padding(.bottom, 20)
+                    // .padding(.bottom, 20)
+                    .offset(x: 10)
                 
                 // Tagline
                 Text("Music That Moves With You")

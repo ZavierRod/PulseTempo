@@ -12,17 +12,19 @@ struct SettingsView: View {
     // MARK: - Properties
     
     @StateObject private var deviceManager = WearableDeviceManager()
-    @Environment(\.dismiss) private var dismiss
+    @StateObject private var authService = AuthService.shared
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     
     // MARK: - State
     
     @State private var showingDevicePicker = false
     @State private var showingSetupInstructions = false
+    @State private var showingSignOutAlert = false
     
     // MARK: - Body
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 GradientBackground()
                 
@@ -77,7 +79,7 @@ struct SettingsView: View {
                                     Image(systemName: showingSetupInstructions ? "chevron.up" : "chevron.down")
                                 }
                             }
-                            .foregroundColor(.blue)
+                            .foregroundColor(.red)
                             .listRowBackground(Color.white.opacity(0.1))
                             
                             if showingSetupInstructions {
@@ -166,17 +168,34 @@ struct SettingsView: View {
                         Text("About")
                             .foregroundColor(.white.opacity(0.8))
                     }
+                    
+                    // Sign Out Section
+                    Section {
+                        Button(action: {
+                            showingSignOutAlert = true
+                        }) {
+                            HStack {
+                                Image(systemName: "rectangle.portrait.and.arrow.right")
+                                    .foregroundColor(.red)
+                                Text("Sign Out")
+                                    .foregroundColor(.red)
+                            }
+                        }
+                        .listRowBackground(Color.white.opacity(0.1))
+                    }
                 }
                 .scrollContentBackground(.hidden)
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
+            .alert("Sign Out", isPresented: $showingSignOutAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Sign Out", role: .destructive) {
+                    authService.logout()
+                    hasCompletedOnboarding = false
                 }
+            } message: {
+                Text("Are you sure you want to sign out?")
             }
         }
         .sheet(isPresented: $showingDevicePicker) {
@@ -235,7 +254,7 @@ private struct DevicePickerSheet: View {
                                 
                                 if selectedDevice == device {
                                     Image(systemName: "checkmark")
-                                        .foregroundColor(.blue)
+                                        .foregroundColor(.red)
                                 }
                             }
                         }
