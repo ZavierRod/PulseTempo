@@ -12,13 +12,14 @@ struct InSyncLogo: View {
     var size: LogoSize = .medium
     
     enum LogoSize {
-        case small, medium, large
+        case small, medium, large, xLarge
         
         var width: CGFloat {
             switch self {
             case .small: return 140
             case .medium: return 240
             case .large: return 340
+            case .xLarge: return 420
             }
         }
     }
@@ -28,6 +29,7 @@ struct InSyncLogo: View {
             .resizable()
             .aspectRatio(contentMode: .fit)
             .frame(width: size.width)
+            .offset(x: size.width * 0.04) // Compensate for heart on left side
     }
 }
 
