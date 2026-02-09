@@ -909,8 +909,9 @@ class MusicService: ObservableObject, MusicServiceProtocol {
     
     /// Add a catalog song to a user's library playlist
     ///
-    /// Uses MusicKit's MusicLibrary API to add a song to the specified playlist.
-    /// MusicDataRequest only supports GET — write operations require MusicLibrary.
+    /// Uses MusicDataRequest with a POST body. MusicDataRequest handles auth
+    /// tokens automatically. The body must be a Codable struct with a `data`
+    /// array wrapper — raw JSONSerialization doesn't work here.
     ///
     /// - Parameters:
     ///   - trackId: The catalog song ID to add
@@ -920,27 +921,25 @@ class MusicService: ObservableObject, MusicServiceProtocol {
             throw MusicKitError.authorizationDenied
         }
         
-        // 1. Fetch the Song from the Apple Music catalog by ID
-        let songRequest = MusicCatalogResourceRequest<Song>(matching: \.id, equalTo: MusicItemID(trackId))
-        let songResponse = try await songRequest.response()
-        guard let song = songResponse.items.first else {
-            print("❌ Could not find catalog song with ID: \(trackId)")
-            throw MusicKitError.itemNotFound
-        }
+        let url = URL(string: "https://api.music.apple.com/v1/me/library/playlists/\(playlistId)/tracks")!
         
-        // 2. Fetch the Playlist from the user's library by ID
-        var playlistRequest = MusicLibraryRequest<Playlist>()
-        playlistRequest.filter(matching: \.id, equalTo: MusicItemID(playlistId))
-        let playlistResponse = try await playlistRequest.response()
-        guard let playlist = playlistResponse.items.first else {
-            print("❌ Could not find library playlist with ID: \(playlistId)")
-            throw MusicKitError.itemNotFound
-        }
+        // Build POST request — MusicDataRequest handles auth tokens automatically
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        // 3. Add the song to the playlist via MusicLibrary (the proper write API)
-        try await MusicLibrary.shared.add(song, to: playlist)
+        // Encode body using Codable (required by MusicDataRequest — raw JSON doesn't work)
+        let requestBody = AddTracksRequestBody(data: [
+            AddTracksRequestItem(id: trackId, type: "songs")
+        ])
+        urlRequest.httpBody = try JSONEncoder().encode(requestBody)
         
-        print("✅ Added '\(song.title)' to playlist '\(playlist.name)'")
+        print("📤 Adding track \(trackId) to playlist \(playlistId)...")
+        
+        let request = MusicDataRequest(urlRequest: urlRequest)
+        let _ = try await request.response()
+        
+        print("✅ Added track \(trackId) to playlist \(playlistId)")
     }
     
     // MARK: - Playback Observers
@@ -1236,6 +1235,19 @@ private struct CatalogTrackItem: Codable {
 
 private struct CatalogTrackAttributes: Codable {
     let previews: [PreviewAsset]?
+}
+
+// MARK: - Add Tracks Request Models
+
+/// Codable body for POST /v1/me/library/playlists/{id}/tracks
+/// MusicDataRequest requires Codable encoding — raw JSONSerialization fails with "Unable to parse request body"
+private struct AddTracksRequestBody: Codable {
+    let data: [AddTracksRequestItem]
+}
+
+private struct AddTracksRequestItem: Codable {
+    let id: String
+    let type: String
 }
 
 // MARK: - Preview Helper
