@@ -45,6 +45,9 @@ final class MusicSearchViewModel: ObservableObject {
     /// Music service for API calls
     private let musicService = MusicService.shared
     
+    /// Preview URLs keyed by track ID (captured during search, used for BPM analysis)
+    private var previewURLs: [String: String] = [:]
+    
     /// Combine subscriptions
     private var cancellables = Set<AnyCancellable>()
     
@@ -84,8 +87,9 @@ final class MusicSearchViewModel: ObservableObject {
         
         Task { @MainActor in
             do {
-                let results = try await musicService.searchCatalog(query: query)
-                self.searchResults = results
+                let result = try await musicService.searchCatalog(query: query)
+                self.searchResults = result.tracks
+                self.previewURLs.merge(result.previewURLs) { _, new in new }
                 self.isSearching = false
             } catch {
                 self.errorMessage = "Search failed: \(error.localizedDescription)"
@@ -118,6 +122,27 @@ final class MusicSearchViewModel: ObservableObject {
                 self.addedTracks.append(track)
                 self.isAdding = false
                 print("🎵 [MusicSearch] UI updated — checkmark shown for '\(track.title)'")
+                
+                // Trigger BPM analysis immediately so the track has BPM data for workouts
+                if let previewUrl = self.previewURLs[track.id] {
+                    print("🔍 [MusicSearch] Triggering BPM analysis for '\(track.title)'")
+                    Task {
+                        await musicService.analyzeTrackBPM(track: track, previewUrl: previewUrl)
+                        // Update the addedTracks entry with the new BPM from cache
+                        await MainActor.run {
+                            if let bpm = UserDefaults.standard.dictionary(forKey: "com.pulsetempo.bpmCache")?[track.id] as? Int,
+                               let index = self.addedTracks.firstIndex(where: { $0.id == track.id }) {
+                                self.addedTracks[index] = Track(
+                                    id: track.id, title: track.title, artist: track.artist,
+                                    durationSeconds: track.durationSeconds, bpm: bpm, artworkURL: track.artworkURL
+                                )
+                                print("✅ [MusicSearch] BPM updated for '\(track.title)': \(bpm)")
+                            }
+                        }
+                    }
+                } else {
+                    print("⚠️ [MusicSearch] No preview URL for '\(track.title)' — BPM analysis skipped")
+                }
             } catch {
                 let errorMsg = "Failed to add song: \(error.localizedDescription)"
                 self.errorMessage = errorMsg

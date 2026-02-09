@@ -757,7 +757,7 @@ class MusicService: ObservableObject, MusicServiceProtocol {
     }
     
     /// Analyze BPM for a track using backend
-    private func analyzeTrackBPM(track: Track, previewUrl: String) async {
+    func analyzeTrackBPM(track: Track, previewUrl: String) async {
         // Use Railway production backend
         let host = "https://pulsetempo-production.up.railway.app"
         
@@ -879,10 +879,12 @@ class MusicService: ObservableObject, MusicServiceProtocol {
     /// Search the Apple Music catalog for songs matching a query
     ///
     /// Used by the music search UI to let users find songs to add to playlists.
+    /// Returns both Track models and a mapping of track IDs to preview URLs
+    /// (needed for BPM analysis after adding to a playlist).
     ///
     /// - Parameter query: The search term (song title, artist, etc.)
-    /// - Returns: Array of Track models from catalog results
-    func searchCatalog(query: String) async throws -> [Track] {
+    /// - Returns: Tuple of (tracks, previewURLs dictionary)
+    func searchCatalog(query: String) async throws -> (tracks: [Track], previewURLs: [String: String]) {
         guard musicKitManager.isAuthorized else {
             throw MusicKitError.authorizationDenied
         }
@@ -892,8 +894,15 @@ class MusicService: ObservableObject, MusicServiceProtocol {
         
         let response = try await request.response()
         
-        return response.songs.map { song in
+        var previewURLs: [String: String] = [:]
+        let tracks = response.songs.map { song -> Track in
             let artworkURL = song.artwork?.url(width: 120, height: 120)
+            
+            // Extract preview URL for BPM analysis
+            if let previewURL = song.previewAssets?.first?.url {
+                previewURLs[song.id.rawValue] = previewURL.absoluteString
+            }
+            
             return Track(
                 id: song.id.rawValue,
                 title: song.title,
@@ -903,6 +912,8 @@ class MusicService: ObservableObject, MusicServiceProtocol {
                 artworkURL: artworkURL
             )
         }
+        
+        return (tracks, previewURLs)
     }
     
     // MARK: - Add Track to Playlist

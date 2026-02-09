@@ -197,7 +197,9 @@ final class HomeViewModel: ObservableObject {
                 completion(.failure(error))
             } else {
                 // Merge in any pending tracks added via search that Apple Music hasn't synced yet
+                // Cross-reference the BPM cache so pending tracks have BPM data if analysis completed
                 var merged = allTracks
+                let bpmCache = UserDefaults.standard.dictionary(forKey: "com.pulsetempo.bpmCache") as? [String: Int] ?? [:]
                 for playlistId in savedPlaylistIds {
                     let pendingKey = "pendingTracks_\(playlistId)"
                     if let encoded = UserDefaults.standard.array(forKey: pendingKey) as? [[String: String]] {
@@ -209,8 +211,9 @@ final class HomeViewModel: ObservableObject {
                             let titleKey = "\(title.lowercased())|\(artist.lowercased())"
                             if !existingIds.contains(id) && !existingTitles.contains(titleKey) {
                                 let artworkURL = dict["artworkURL"].flatMap { $0.isEmpty ? nil : URL(string: $0) }
-                                merged.append(Track(id: id, title: title, artist: artist, durationSeconds: duration, bpm: nil, artworkURL: artworkURL))
-                                print("📌 [Workout] Merged pending track '\(title)' into workout tracks")
+                                let bpm = bpmCache[id] ?? bpmCache[titleKey]
+                                merged.append(Track(id: id, title: title, artist: artist, durationSeconds: duration, bpm: bpm, artworkURL: artworkURL))
+                                print("📌 [Workout] Merged pending track '\(title)' (BPM: \(bpm?.description ?? "nil")) into workout tracks")
                             }
                         }
                     }

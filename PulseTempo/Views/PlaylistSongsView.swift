@@ -48,14 +48,16 @@ struct PlaylistSongsView: View {
         UserDefaults.standard.set(encoded, forKey: pendingTracksKey)
     }
     
-    /// Load pending tracks from UserDefaults
+    /// Load pending tracks from UserDefaults, cross-referencing the BPM cache
     private func loadPendingTracks() -> [Track] {
         guard let encoded = UserDefaults.standard.array(forKey: pendingTracksKey) as? [[String: String]] else { return [] }
+        let bpmCache = UserDefaults.standard.dictionary(forKey: "com.pulsetempo.bpmCache") as? [String: Int] ?? [:]
         return encoded.compactMap { dict in
             guard let id = dict["id"], let title = dict["title"], let artist = dict["artist"],
                   let durationStr = dict["duration"], let duration = Int(durationStr) else { return nil }
             let artworkURL = dict["artworkURL"].flatMap { $0.isEmpty ? nil : URL(string: $0) }
-            return Track(id: id, title: title, artist: artist, durationSeconds: duration, bpm: nil, artworkURL: artworkURL)
+            let bpm = bpmCache[id] ?? bpmCache["\(title.lowercased())|\(artist.lowercased())"]
+            return Track(id: id, title: title, artist: artist, durationSeconds: duration, bpm: bpm, artworkURL: artworkURL)
         }
     }
     
