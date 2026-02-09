@@ -37,6 +37,39 @@ struct PlaylistSongsView: View {
     /// Music service for playback
     @ObservedObject private var musicService = MusicService.shared
     
+    // MARK: - Pending Tracks Persistence
+    
+    /// UserDefaults key for pending tracks for this playlist
+    private var pendingTracksKey: String { "pendingTracks_\(playlist.id)" }
+    
+    /// Save pending tracks to UserDefaults so they survive view re-creation
+    private func savePendingTracks(_ pending: [Track]) {
+        let encoded = pending.map { ["id": $0.id, "title": $0.title, "artist": $0.artist, "duration": String($0.durationSeconds), "artworkURL": $0.artworkURL?.absoluteString ?? ""] }
+        UserDefaults.standard.set(encoded, forKey: pendingTracksKey)
+    }
+    
+    /// Load pending tracks from UserDefaults
+    private func loadPendingTracks() -> [Track] {
+        guard let encoded = UserDefaults.standard.array(forKey: pendingTracksKey) as? [[String: String]] else { return [] }
+        return encoded.compactMap { dict in
+            guard let id = dict["id"], let title = dict["title"], let artist = dict["artist"],
+                  let durationStr = dict["duration"], let duration = Int(durationStr) else { return nil }
+            let artworkURL = dict["artworkURL"].flatMap { $0.isEmpty ? nil : URL(string: $0) }
+            return Track(id: id, title: title, artist: artist, durationSeconds: duration, bpm: nil, artworkURL: artworkURL)
+        }
+    }
+    
+    /// Remove pending tracks that now appear in the API response (Apple synced)
+    private func cleanSyncedPendingTracks(apiTracks: [Track]) {
+        var pending = loadPendingTracks()
+        let apiIds = Set(apiTracks.map { $0.id })
+        let apiTitles = Set(apiTracks.map { "\($0.title.lowercased())|\($0.artist.lowercased())" })
+        pending.removeAll { track in
+            apiIds.contains(track.id) || apiTitles.contains("\(track.title.lowercased())|\(track.artist.lowercased())")
+        }
+        savePendingTracks(pending)
+    }
+    
     // MARK: - Body
     
     var body: some View {
@@ -70,15 +103,17 @@ struct PlaylistSongsView: View {
         }
         .sheet(isPresented: $showingMusicSearch) {
             MusicSearchView(playlistId: playlist.id) { addedTracks in
-                // Optimistically append added tracks to local list immediately
-                // Apple Music API has eventual consistency — tracks may not appear
-                // in the library endpoint for 30-60 seconds after being added
+                // Persist newly added tracks so they survive view re-creation
+                // Apple Music API has eventual consistency (~30-60s sync delay)
+                var pending = loadPendingTracks()
                 for newTrack in addedTracks {
                     if !tracks.contains(where: { $0.id == newTrack.id }) {
                         tracks.append(newTrack)
+                        pending.append(newTrack)
                         print("📌 [PlaylistSongs] Optimistically added '\(newTrack.title)' to local list")
                     }
                 }
+                savePendingTracks(pending)
             }
         }
     }
@@ -268,7 +303,21 @@ struct PlaylistSongsView: View {
                 
                 switch result {
                 case .success(let fetchedTracks):
-                    tracks = fetchedTracks
+                    // Merge in any pending tracks that Apple hasn't synced yet
+                    let pending = self.loadPendingTracks()
+                    var merged = fetchedTracks
+                    let existingIds = Set(fetchedTracks.map { $0.id })
+                    let existingTitles = Set(fetchedTracks.map { "\($0.title.lowercased())|\($0.artist.lowercased())" })
+                    for pendingTrack in pending {
+                        let titleKey = "\(pendingTrack.title.lowercased())|\(pendingTrack.artist.lowercased())"
+                        if !existingIds.contains(pendingTrack.id) && !existingTitles.contains(titleKey) {
+                            merged.append(pendingTrack)
+                            print("📌 [PlaylistSongs] Merged pending track '\(pendingTrack.title)' into list")
+                        }
+                    }
+                    // Clean up any pending tracks that Apple has now synced
+                    self.cleanSyncedPendingTracks(apiTracks: fetchedTracks)
+                    tracks = merged
                 case .failure(let error):
                     errorMessage = error.localizedDescription
                 }
