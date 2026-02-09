@@ -18,8 +18,8 @@ struct MusicSearchView: View {
     /// View model managing search state and playlist additions
     @StateObject private var viewModel: MusicSearchViewModel
     
-    /// Callback when the sheet is dismissed (signals parent to refresh)
-    var onDismiss: (() -> Void)?
+    /// Callback when the sheet is dismissed — passes back tracks that were added
+    var onSongsAdded: (([Track]) -> Void)?
     
     /// Tracks whether any songs were added (to trigger refresh)
     @State private var didAddSongs: Bool = false
@@ -29,9 +29,9 @@ struct MusicSearchView: View {
     
     // MARK: - Initialization
     
-    init(playlistId: String, onDismiss: (() -> Void)? = nil) {
+    init(playlistId: String, onSongsAdded: (([Track]) -> Void)? = nil) {
         _viewModel = StateObject(wrappedValue: MusicSearchViewModel(playlistId: playlistId))
-        self.onDismiss = onDismiss
+        self.onSongsAdded = onSongsAdded
     }
     
     // MARK: - Body
@@ -65,7 +65,7 @@ struct MusicSearchView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") {
                         if didAddSongs {
-                            onDismiss?()
+                            onSongsAdded?(viewModel.addedTracks)
                         }
                         dismiss()
                     }

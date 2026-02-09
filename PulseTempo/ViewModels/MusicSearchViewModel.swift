@@ -34,6 +34,9 @@ final class MusicSearchViewModel: ObservableObject {
     /// Set of track IDs that were successfully added (for UI feedback)
     @Published var addedTrackIds: Set<String> = []
     
+    /// Full Track objects that were successfully added (for optimistic UI updates)
+    @Published var addedTracks: [Track] = []
+    
     // MARK: - Private Properties
     
     /// The playlist ID to add songs to
@@ -112,6 +115,7 @@ final class MusicSearchViewModel: ObservableObject {
             do {
                 try await musicService.addTrackToPlaylist(trackId: track.id, playlistId: playlistId)
                 self.addedTrackIds.insert(track.id)
+                self.addedTracks.append(track)
                 self.isAdding = false
                 print("🎵 [MusicSearch] UI updated — checkmark shown for '\(track.title)'")
             } catch {

@@ -69,9 +69,16 @@ struct PlaylistSongsView: View {
             }
         }
         .sheet(isPresented: $showingMusicSearch) {
-            MusicSearchView(playlistId: playlist.id) {
-                // Refresh tracks after songs were added
-                fetchTracks()
+            MusicSearchView(playlistId: playlist.id) { addedTracks in
+                // Optimistically append added tracks to local list immediately
+                // Apple Music API has eventual consistency — tracks may not appear
+                // in the library endpoint for 30-60 seconds after being added
+                for newTrack in addedTracks {
+                    if !tracks.contains(where: { $0.id == newTrack.id }) {
+                        tracks.append(newTrack)
+                        print("📌 [PlaylistSongs] Optimistically added '\(newTrack.title)' to local list")
+                    }
+                }
             }
         }
     }
