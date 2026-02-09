@@ -97,7 +97,13 @@ final class MusicSearchViewModel: ObservableObject {
     ///
     /// - Parameter track: The catalog track to add
     func addTrack(_ track: Track) {
-        guard !addedTrackIds.contains(track.id) else { return }
+        guard !addedTrackIds.contains(track.id) else {
+            print("⚠️ [MusicSearch] Track already added: \(track.id)")
+            return
+        }
+        
+        print("🎵 [MusicSearch] Adding '\(track.title)' by \(track.artist)")
+        print("🎵 [MusicSearch] Track ID: \(track.id) → Playlist ID: \(playlistId)")
         
         isAdding = true
         errorMessage = nil
@@ -107,9 +113,12 @@ final class MusicSearchViewModel: ObservableObject {
                 try await musicService.addTrackToPlaylist(trackId: track.id, playlistId: playlistId)
                 self.addedTrackIds.insert(track.id)
                 self.isAdding = false
+                print("🎵 [MusicSearch] UI updated — checkmark shown for '\(track.title)'")
             } catch {
-                self.errorMessage = "Failed to add song: \(error.localizedDescription)"
+                let errorMsg = "Failed to add song: \(error.localizedDescription)"
+                self.errorMessage = errorMsg
                 self.isAdding = false
+                print("🎵 [MusicSearch] UI error shown: \(errorMsg)")
             }
         }
     }

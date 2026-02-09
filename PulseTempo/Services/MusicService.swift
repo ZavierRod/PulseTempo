@@ -918,10 +918,12 @@ class MusicService: ObservableObject, MusicServiceProtocol {
     ///   - playlistId: The library playlist ID to add the song to
     func addTrackToPlaylist(trackId: String, playlistId: String) async throws {
         guard musicKitManager.isAuthorized else {
+            print("❌ [AddTrack] Not authorized")
             throw MusicKitError.authorizationDenied
         }
         
-        let url = URL(string: "https://api.music.apple.com/v1/me/library/playlists/\(playlistId)/tracks")!
+        let urlString = "https://api.music.apple.com/v1/me/library/playlists/\(playlistId)/tracks"
+        let url = URL(string: urlString)!
         
         // Build POST request — MusicDataRequest handles auth tokens automatically
         var urlRequest = URLRequest(url: url)
@@ -932,14 +934,53 @@ class MusicService: ObservableObject, MusicServiceProtocol {
         let requestBody = AddTracksRequestBody(data: [
             AddTracksRequestItem(id: trackId, type: "songs")
         ])
-        urlRequest.httpBody = try JSONEncoder().encode(requestBody)
+        let encodedBody = try JSONEncoder().encode(requestBody)
+        urlRequest.httpBody = encodedBody
         
-        print("📤 Adding track \(trackId) to playlist \(playlistId)...")
+        // Debug: log full request details
+        let bodyString = String(data: encodedBody, encoding: .utf8) ?? "nil"
+        print("")
+        print("═══════════════════════════════════════════")
+        print("📤 [AddTrack] POST \(urlString)")
+        print("📤 [AddTrack] trackId: \(trackId)")
+        print("📤 [AddTrack] playlistId: \(playlistId)")
+        print("📤 [AddTrack] body: \(bodyString)")
+        print("📤 [AddTrack] httpMethod: \(urlRequest.httpMethod ?? "nil")")
+        print("📤 [AddTrack] Content-Type: \(urlRequest.value(forHTTPHeaderField: "Content-Type") ?? "nil")")
+        print("═══════════════════════════════════════════")
         
-        let request = MusicDataRequest(urlRequest: urlRequest)
-        let _ = try await request.response()
-        
-        print("✅ Added track \(trackId) to playlist \(playlistId)")
+        do {
+            let request = MusicDataRequest(urlRequest: urlRequest)
+            let response = try await request.response()
+            
+            // Debug: log response details
+            let httpResponse = response.urlResponse as? HTTPURLResponse
+            let statusCode = httpResponse?.statusCode ?? -1
+            let responseDataSize = response.data.count
+            let responseBody = String(data: response.data, encoding: .utf8) ?? "<\(responseDataSize) bytes>"
+            
+            print("")
+            print("═══════════════════════════════════════════")
+            print("✅ [AddTrack] Response received")
+            print("✅ [AddTrack] HTTP status: \(statusCode)")
+            print("✅ [AddTrack] Response size: \(responseDataSize) bytes")
+            if responseDataSize > 0 && responseDataSize < 1000 {
+                print("✅ [AddTrack] Response body: \(responseBody)")
+            }
+            print("✅ [AddTrack] Successfully added track \(trackId) to playlist \(playlistId)")
+            print("═══════════════════════════════════════════")
+            print("")
+        } catch {
+            print("")
+            print("═══════════════════════════════════════════")
+            print("❌ [AddTrack] REQUEST FAILED")
+            print("❌ [AddTrack] Error type: \(type(of: error))")
+            print("❌ [AddTrack] Error: \(error)")
+            print("❌ [AddTrack] Localized: \(error.localizedDescription)")
+            print("═══════════════════════════════════════════")
+            print("")
+            throw error
+        }
     }
     
     // MARK: - Playback Observers
