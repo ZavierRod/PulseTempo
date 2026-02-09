@@ -30,6 +30,9 @@ struct PlaylistSongsView: View {
     /// Error message if something goes wrong
     @State private var errorMessage: String?
     
+    /// Whether the music search sheet is showing
+    @State private var showingMusicSearch: Bool = false
+    
     /// Music service for fetching tracks
     /// Music service for playback
     @ObservedObject private var musicService = MusicService.shared
@@ -65,6 +68,12 @@ struct PlaylistSongsView: View {
                 tracks[index] = updatedTrack
             }
         }
+        .sheet(isPresented: $showingMusicSearch) {
+            MusicSearchView(playlistId: playlist.id) {
+                // Refresh tracks after songs were added
+                fetchTracks()
+            }
+        }
     }
     
     // MARK: - Header Section
@@ -86,6 +95,30 @@ struct PlaylistSongsView: View {
                 }
                 
                 Spacer()
+                
+                // Add Songs button
+                Button(action: { showingMusicSearch = true }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 14, weight: .bold))
+                        Text("Add Songs")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color.pink, Color.red],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
             }
             .padding(.horizontal, 20)
             .padding(.top, 12)

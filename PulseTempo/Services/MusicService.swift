@@ -874,6 +874,72 @@ class MusicService: ObservableObject, MusicServiceProtocol {
         return song
     }
     
+    // MARK: - Catalog Search (User-Facing)
+    
+    /// Search the Apple Music catalog for songs matching a query
+    ///
+    /// Used by the music search UI to let users find songs to add to playlists.
+    ///
+    /// - Parameter query: The search term (song title, artist, etc.)
+    /// - Returns: Array of Track models from catalog results
+    func searchCatalog(query: String) async throws -> [Track] {
+        guard musicKitManager.isAuthorized else {
+            throw MusicKitError.authorizationDenied
+        }
+        
+        var request = MusicCatalogSearchRequest(term: query, types: [Song.self])
+        request.limit = 25
+        
+        let response = try await request.response()
+        
+        return response.songs.map { song in
+            let artworkURL = song.artwork?.url(width: 120, height: 120)
+            return Track(
+                id: song.id.rawValue,
+                title: song.title,
+                artist: song.artistName,
+                durationSeconds: Int((song.duration ?? 0)),
+                bpm: nil,
+                artworkURL: artworkURL
+            )
+        }
+    }
+    
+    // MARK: - Add Track to Playlist
+    
+    /// Add a catalog song to a user's library playlist
+    ///
+    /// Uses the Apple Music API to POST a track to the specified playlist.
+    ///
+    /// - Parameters:
+    ///   - trackId: The catalog song ID to add
+    ///   - playlistId: The library playlist ID to add the song to
+    func addTrackToPlaylist(trackId: String, playlistId: String) async throws {
+        guard musicKitManager.isAuthorized else {
+            throw MusicKitError.authorizationDenied
+        }
+        
+        let url = URL(string: "https://api.music.apple.com/v1/me/library/playlists/\(playlistId)/tracks")!
+        
+        // Build the POST body: { "data": [{ "id": "...", "type": "songs" }] }
+        let body: [String: Any] = [
+            "data": [
+                ["id": trackId, "type": "songs"]
+            ]
+        ]
+        let jsonData = try JSONSerialization.data(withJSONObject: body)
+        
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.httpBody = jsonData
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let request = MusicDataRequest(urlRequest: urlRequest)
+        let _ = try await request.response()
+        
+        print("✅ Added track \(trackId) to playlist \(playlistId)")
+    }
+    
     // MARK: - Playback Observers
     
     /// Set up observers for playback state changes
