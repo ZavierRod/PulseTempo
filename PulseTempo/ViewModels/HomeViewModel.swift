@@ -196,8 +196,27 @@ final class HomeViewModel: ObservableObject {
             if let error = fetchError {
                 completion(.failure(error))
             } else {
-                print("🎵 Fetched \(allTracks.count) tracks for workout")
-                completion(.success(allTracks))
+                // Merge in any pending tracks added via search that Apple Music hasn't synced yet
+                var merged = allTracks
+                for playlistId in savedPlaylistIds {
+                    let pendingKey = "pendingTracks_\(playlistId)"
+                    if let encoded = UserDefaults.standard.array(forKey: pendingKey) as? [[String: String]] {
+                        let existingIds = Set(merged.map { $0.id })
+                        let existingTitles = Set(merged.map { "\($0.title.lowercased())|\($0.artist.lowercased())" })
+                        for dict in encoded {
+                            guard let id = dict["id"], let title = dict["title"], let artist = dict["artist"],
+                                  let durationStr = dict["duration"], let duration = Int(durationStr) else { continue }
+                            let titleKey = "\(title.lowercased())|\(artist.lowercased())"
+                            if !existingIds.contains(id) && !existingTitles.contains(titleKey) {
+                                let artworkURL = dict["artworkURL"].flatMap { $0.isEmpty ? nil : URL(string: $0) }
+                                merged.append(Track(id: id, title: title, artist: artist, durationSeconds: duration, bpm: nil, artworkURL: artworkURL))
+                                print("📌 [Workout] Merged pending track '\(title)' into workout tracks")
+                            }
+                        }
+                    }
+                }
+                print("🎵 Fetched \(merged.count) tracks for workout (\(merged.count - allTracks.count) from pending)")
+                completion(.success(merged))
             }
         }
     }
