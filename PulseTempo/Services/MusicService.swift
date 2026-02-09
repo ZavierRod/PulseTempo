@@ -909,7 +909,8 @@ class MusicService: ObservableObject, MusicServiceProtocol {
     
     /// Add a catalog song to a user's library playlist
     ///
-    /// Uses the Apple Music API to POST a track to the specified playlist.
+    /// Uses MusicKit's MusicLibrary API to add a song to the specified playlist.
+    /// MusicDataRequest only supports GET — write operations require MusicLibrary.
     ///
     /// - Parameters:
     ///   - trackId: The catalog song ID to add
@@ -919,25 +920,27 @@ class MusicService: ObservableObject, MusicServiceProtocol {
             throw MusicKitError.authorizationDenied
         }
         
-        let url = URL(string: "https://api.music.apple.com/v1/me/library/playlists/\(playlistId)/tracks")!
+        // 1. Fetch the Song from the Apple Music catalog by ID
+        let songRequest = MusicCatalogResourceRequest<Song>(matching: \.id, equalTo: MusicItemID(trackId))
+        let songResponse = try await songRequest.response()
+        guard let song = songResponse.items.first else {
+            print("❌ Could not find catalog song with ID: \(trackId)")
+            throw MusicKitError.itemNotFound
+        }
         
-        // Build the POST body: { "data": [{ "id": "...", "type": "songs" }] }
-        let body: [String: Any] = [
-            "data": [
-                ["id": trackId, "type": "songs"]
-            ]
-        ]
-        let jsonData = try JSONSerialization.data(withJSONObject: body)
+        // 2. Fetch the Playlist from the user's library by ID
+        var playlistRequest = MusicLibraryRequest<Playlist>()
+        playlistRequest.filter(matching: \.id, equalTo: MusicItemID(playlistId))
+        let playlistResponse = try await playlistRequest.response()
+        guard let playlist = playlistResponse.items.first else {
+            print("❌ Could not find library playlist with ID: \(playlistId)")
+            throw MusicKitError.itemNotFound
+        }
         
-        var urlRequest = URLRequest(url: url)
-        urlRequest.httpMethod = "POST"
-        urlRequest.httpBody = jsonData
-        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // 3. Add the song to the playlist via MusicLibrary (the proper write API)
+        try await MusicLibrary.shared.add(song, to: playlist)
         
-        let request = MusicDataRequest(urlRequest: urlRequest)
-        let _ = try await request.response()
-        
-        print("✅ Added track \(trackId) to playlist \(playlistId)")
+        print("✅ Added '\(song.title)' to playlist '\(playlist.name)'")
     }
     
     // MARK: - Playback Observers
