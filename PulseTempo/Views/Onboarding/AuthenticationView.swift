@@ -88,7 +88,7 @@ struct AuthenticationView: View {
             Spacer()
             
             InSyncLogo(size: .medium)
-            .offset(x: 20)
+            .offset(x: 30)
             
             Spacer()
             

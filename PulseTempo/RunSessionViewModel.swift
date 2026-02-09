@@ -50,6 +50,7 @@ final class RunSessionViewModel: ObservableObject {
     // RUN SESSION STATE
     @Published var sessionState: RunSessionState = .notStarted  // Current run state
     @Published var elapsedTime: TimeInterval = 0                // Time since run started (seconds)
+    @Published var isWorkoutPaused: Bool = false                // Is the workout timer paused? (independent of music)
     
     /// Whether to show the workout summary (after finish)
     @Published var showingSummary: Bool = false
@@ -264,24 +265,24 @@ final class RunSessionViewModel: ObservableObject {
     
     /// Set up observers for watch workout state changes
     private func setupWatchObservers() {
-        // Watch paused workout
+        // Watch paused workout (only pauses workout timer, music keeps playing)
         watchConnectivityManager.onWatchWorkoutPaused = { [weak self] in
             guard let self = self else { return }
             Task { @MainActor in
                 if self.sessionState == .active {
-                    self.pauseRun(sendToWatch: false)  // Don't send back to watch
-                    print("⏸ [iOS] Synced pause from watch")
+                    self.pauseWorkout(sendToWatch: false)  // Don't send back to watch
+                    print("⏸ [iOS] Synced workout pause from watch (music unaffected)")
                 }
             }
         }
         
-        // Watch resumed workout
+        // Watch resumed workout (only resumes workout timer, music state unchanged)
         watchConnectivityManager.onWatchWorkoutResumed = { [weak self] in
             guard let self = self else { return }
             Task { @MainActor in
                 if self.sessionState == .paused {
-                    self.resumeRun(sendToWatch: false)  // Don't send back to watch
-                    print("▶️ [iOS] Synced resume from watch")
+                    self.resumeWorkout(sendToWatch: false)  // Don't send back to watch
+                    print("▶️ [iOS] Synced workout resume from watch (music unaffected)")
                 }
             }
         }
@@ -466,28 +467,27 @@ final class RunSessionViewModel: ObservableObject {
         }
     }
     
-    /// Pause the run session
-    /// Pauses music but continues heart rate monitoring
+    /// Pause the workout timer and watch workout (music continues independently)
+    /// Heart rate monitoring continues so HR data is still collected
     /// - Parameter sendToWatch: Whether to send pause command to watch (default: true)
-    func pauseRun(sendToWatch: Bool = true) {
+    func pauseWorkout(sendToWatch: Bool = true) {
         sessionState = .paused
-        isPlaying = false  // Update UI immediately
-        musicService.pause()
+        isWorkoutPaused = true
         runTimer?.invalidate()
         
         // Send to watch if requested (avoid loop when receiving from watch)
         if sendToWatch {
             watchConnectivityManager.sendPauseWorkoutCommand()
         }
+        
+        print("⏸ [iOS] Workout paused (music continues independently)")
     }
     
-    /// Resume the run session
-    /// Resumes music playback
+    /// Resume the workout timer and watch workout (music state unchanged)
     /// - Parameter sendToWatch: Whether to send resume command to watch (default: true)
-    func resumeRun(sendToWatch: Bool = true) {
+    func resumeWorkout(sendToWatch: Bool = true) {
         sessionState = .active
-        isPlaying = true  // Update UI immediately
-        musicService.resume()
+        isWorkoutPaused = false
         
         // Timer scheduled on main runloop because RunSessionViewModel is @MainActor
         runTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
@@ -497,6 +497,17 @@ final class RunSessionViewModel: ObservableObject {
         // Send to watch if requested (avoid loop when receiving from watch)
         if sendToWatch {
             watchConnectivityManager.sendResumeWorkoutCommand()
+        }
+        
+        print("▶️ [iOS] Workout resumed (music state unchanged)")
+    }
+    
+    /// Toggle music playback only (workout timer unaffected)
+    func toggleMusicPlayPause() {
+        if isPlaying {
+            musicService.pause()
+        } else {
+            musicService.resume()
         }
     }
     
@@ -612,21 +623,15 @@ final class RunSessionViewModel: ObservableObject {
         print("🏠 [iOS] Summary dismissed")
     }
     
-    /// Toggle play/pause state
-    /// Pauses or resumes based on current state
-    ///
-    /// Python equivalent:
-    /// def toggle_play_pause(self):
-    ///     if self.session_state == RunSessionState.ACTIVE:
-    ///         self.pause_run()
-    ///     elif self.session_state == RunSessionState.PAUSED:
-    ///         self.resume_run()
-    func togglePlayPause() {
+    /// Toggle workout pause state
+    /// Pauses or resumes the workout timer and watch workout
+    /// Music playback is NOT affected
+    func toggleWorkoutPause() {
         switch sessionState {
         case .active:
-            pauseRun()
+            pauseWorkout()
         case .paused:
-            resumeRun()
+            resumeWorkout()
         default:
             break
         }

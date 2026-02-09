@@ -2,6 +2,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
+from jose import jwt, JWTError
 from app import deps
 from app.core import security
 from app.crud import crud_user
@@ -31,14 +32,14 @@ def register_with_email(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="An account with this email already exists"
         )
-    
+
     # Create user
     user = crud_user.create_with_email(db, obj_in=user_in)
-    
+
     # Generate tokens
     access_token = security.create_access_token(user.id)
     refresh_token = security.create_refresh_token(user.id)
-    
+
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
@@ -54,16 +55,17 @@ def login_with_email(
     """
     Login with email and password.
     """
-    user = crud_user.authenticate_email(db, email=login_in.email, password=login_in.password)
+    user = crud_user.authenticate_email(
+        db, email=login_in.email, password=login_in.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password"
         )
-    
+
     access_token = security.create_access_token(user.id)
     refresh_token = security.create_refresh_token(user.id)
-    
+
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
@@ -73,12 +75,68 @@ def login_with_email(
 
 @router.get("/me", response_model=UserResponse)
 def get_current_user_info(
-    current_user = Depends(deps.get_current_user)
+    current_user=Depends(deps.get_current_user)
 ):
     """
     Get current authenticated user's info.
     """
     return current_user
+
+
+# ═══════════════════════════════════════════════════════════
+# TOKEN REFRESH
+# ═══════════════════════════════════════════════════════════
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
+@router.post("/refresh", response_model=Token)
+def refresh_access_token(
+    body: RefreshTokenRequest,
+    db: Session = Depends(deps.get_db)
+):
+    """
+    Exchange a valid refresh token for a new access + refresh token pair.
+    """
+    try:
+        payload = jwt.decode(
+            body.refresh_token, security.SECRET_KEY, algorithms=[
+                security.ALGORITHM]
+        )
+        # Ensure this is actually a refresh token (has type="refresh")
+        if payload.get("type") != "refresh":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token type",
+            )
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token payload",
+            )
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token expired or invalid",
+        )
+
+    user = crud_user.get(db, user_id=user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    access_token = security.create_access_token(user.id)
+    refresh_token = security.create_refresh_token(user.id)
+
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+    }
 
 
 # ═══════════════════════════════════════════════════════════

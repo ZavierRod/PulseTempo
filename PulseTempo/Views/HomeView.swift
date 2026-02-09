@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import MusicKit
 
 /// Home screen dashboard - central hub before starting workouts
 struct HomeView: View {
@@ -17,6 +18,8 @@ struct HomeView: View {
     
     /// Navigation state
     @State private var showingActiveRun = false
+    /// Sheet for viewing selected playlists
+    @State private var showingSelectedPlaylists = false
     
     /// Workout tracks state
     @State private var workoutTracks: [Track] = []
@@ -25,6 +28,9 @@ struct HomeView: View {
     
     /// Selected workout mode (Heart Rate vs Cadence)
     @State private var selectedRunMode: RunMode = .steadyTempo
+    
+    /// Selected workout to view summary
+    @State private var selectedWorkout: WorkoutSummary?
     
     // MARK: - Body
     
@@ -37,17 +43,14 @@ struct HomeView: View {
                 ScrollView {
                     VStack(spacing: 24) {
                         // Logo at top
-                        InSyncLogo(size: .medium)
-                            .padding(.top, 8)
-                        
+                        InSyncLogo(size: .large)
+                            .padding(.top, 12)
+                            .offset(x: 30)
                         // Header
                         headerSection
                         
                         // Quick Start Area
                         quickStartSection
-                        
-                        // Selected Playlists Summary
-                        playlistSummarySection
                         
                         // Last Workout (if available)
                         if let lastWorkout = viewModel.lastWorkout {
@@ -61,6 +64,14 @@ struct HomeView: View {
             .navigationBarHidden(true)
             .fullScreenCover(isPresented: $showingActiveRun) {
                 ActiveRunView(tracks: workoutTracks, runMode: selectedRunMode)
+            }
+            .sheet(isPresented: $showingSelectedPlaylists) {
+                SelectedPlaylistsSheet(playlists: viewModel.selectedPlaylists)
+            }
+            .sheet(item: $selectedWorkout) { workout in
+                WorkoutSummaryView(workout: workout, onDismiss: {
+                    selectedWorkout = nil
+                })
             }
             .onAppear {
                 viewModel.refreshPlaylists()
@@ -190,11 +201,14 @@ struct HomeView: View {
             // Workout Info
             if !viewModel.selectedPlaylists.isEmpty {
                 HStack(spacing: 20) {
-                    InfoPill(
-                        icon: "music.note.list",
-                        text: "\(viewModel.selectedPlaylists.count) \(viewModel.selectedPlaylists.count == 1 ? "playlist" : "playlists")",
-                        color: .purple
-                    )
+                    Button(action: { showingSelectedPlaylists = true }) {
+                        InfoPill(
+                            icon: "music.note.list",
+                            text: "\(viewModel.selectedPlaylists.count) \(viewModel.selectedPlaylists.count == 1 ? "playlist" : "playlists")",
+                            color: .red
+                        )
+                    }
+                    .buttonStyle(PlainButtonStyle())
                     
                     // Only show song count if available
                     if viewModel.totalTrackCount > 0 {
@@ -239,51 +253,6 @@ struct HomeView: View {
         .padding(.bottom, 8)
     }
     
-    // MARK: - Playlist Summary Section
-    
-    private var playlistSummarySection: some View {
-        VStack(spacing: 12) {
-            HStack {
-                Text("Your Playlists")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(.white)
-                
-                Spacer()
-            }
-            
-            if viewModel.isLoading {
-                ProgressView()
-                    .scaleEffect(1.2)
-                    .padding(.vertical, 20)
-            } else if viewModel.selectedPlaylists.isEmpty {
-                HStack(spacing: 12) {
-                    Image(systemName: "music.note.list")
-                        .font(.system(size: 24))
-                        .foregroundColor(.gray.opacity(0.5))
-                    
-                    Text("No playlists selected — go to Playlists tab")
-                        .font(.bebasNeueSubheadline)
-                        .foregroundColor(.white.opacity(0.7))
-                }
-                .padding(.vertical, 16)
-            } else {
-                VStack(spacing: 8) {
-                    ForEach(viewModel.selectedPlaylists.prefix(3)) { playlist in
-                        PlaylistOverviewCard(playlist: playlist) { }
-                    }
-                    
-                    if viewModel.selectedPlaylists.count > 3 {
-                        Text("+\(viewModel.selectedPlaylists.count - 3) more")
-                            .font(.bebasNeueCaption)
-                            .foregroundColor(.white.opacity(0.6))
-                    }
-                }
-            }
-        }
-        .padding(20)
-        .glassCardStyle()
-    }
-    
     // MARK: - Last Workout Section
     
     private func lastWorkoutSection(_ workout: WorkoutSummary) -> some View {
@@ -296,30 +265,37 @@ struct HomeView: View {
                 Spacer()
             }
             
-            HStack(spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(workout.formattedDate)
-                        .font(.bebasNeueSubheadline)
-                        .foregroundColor(.white.opacity(0.7))
-                    
-                    HStack(spacing: 12) {
-                        Label("\(workout.formattedDuration)", systemImage: "clock")
-                        Label("\(workout.averageBPM) BPM", systemImage: "heart.fill")
-                        if workout.averageCadence > 0 {
-                            Label("\(workout.averageCadence) SPM", systemImage: "figure.run")
+            Button(action: { selectedWorkout = workout }) {
+                HStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(workout.formattedDate)
+                            .font(.bebasNeueSubheadline)
+                            .foregroundColor(.white.opacity(0.7))
+                        
+                        HStack(spacing: 12) {
+                            Label("\(workout.formattedDuration)", systemImage: "clock")
+                            Label("\(workout.averageBPM) BPM", systemImage: "heart.fill")
+                            if workout.averageCadence > 0 {
+                                Label("\(workout.averageCadence) SPM", systemImage: "figure.run")
+                            }
                         }
+                        .font(.bebasNeueCaption)
+                        .foregroundColor(.white)
                     }
-                    .font(.bebasNeueCaption)
-                    .foregroundColor(.white)
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.white.opacity(0.4))
                 }
-                
-                Spacer()
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.red.opacity(0.1))
+                )
             }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.red.opacity(0.1))
-            )
+            .buttonStyle(PlainButtonStyle())
         }
         .padding(20)
         .glassCardStyle()
@@ -447,6 +423,134 @@ struct WorkoutModeButton: View {
             )
         }
         .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - Selected Playlists Sheet
+
+struct SelectedPlaylistsSheet: View {
+    let playlists: [MusicPlaylist]
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedPlaylistForViewing: MusicPlaylist?
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                GradientBackground()
+                
+                if playlists.isEmpty {
+                    Text("No playlists selected")
+                        .font(.bebasNeueSubheadline)
+                        .foregroundColor(.white.opacity(0.7))
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
+                            ForEach(playlists) { playlist in
+                                HStack(spacing: 12) {
+                                    if let artwork = playlist.artwork,
+                                       let url = artwork.url(width: 100, height: 100) {
+                                        AsyncImage(url: url) { phase in
+                                            switch phase {
+                                            case .success(let image):
+                                                image
+                                                    .resizable()
+                                                    .aspectRatio(contentMode: .fill)
+                                                    .frame(width: 56, height: 56)
+                                                    .cornerRadius(8)
+                                            case .failure(_):
+                                                placeholderArtwork
+                                            case .empty:
+                                                ProgressView()
+                                                    .tint(.white)
+                                                    .frame(width: 56, height: 56)
+                                            @unknown default:
+                                                placeholderArtwork
+                                            }
+                                        }
+                                    } else {
+                                        placeholderArtwork
+                                    }
+                                    
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(playlist.name)
+                                            .font(.bebasNeueSubheadline)
+                                            .foregroundColor(.white)
+                                            .lineLimit(1)
+                                        
+                                        Text("\(playlist.trackCount) \(playlist.trackCount == 1 ? "song" : "songs")")
+                                            .font(.bebasNeueCaption)
+                                            .foregroundColor(.white.opacity(0.7))
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    Button(action: { selectedPlaylistForViewing = playlist }) {
+                                        HStack(spacing: 4) {
+                                            Text("View")
+                                                .font(.system(size: 14, weight: .medium))
+                                            Image(systemName: "chevron.right")
+                                                .font(.system(size: 12, weight: .semibold))
+                                        }
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .fill(Color.white.opacity(0.2))
+                                        )
+                                    }
+                                    .buttonStyle(PlainButtonStyle())
+                                }
+                                .padding(12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color.white.opacity(0.1))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                                        )
+                                )
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 16)
+                    }
+                }
+            }
+            .navigationTitle("Selected Playlists")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                        .foregroundColor(.white)
+                }
+            }
+            .sheet(item: $selectedPlaylistForViewing) { playlist in
+                PlaylistSongsView(
+                    playlist: playlist,
+                    onDismiss: {
+                        selectedPlaylistForViewing = nil
+                    }
+                )
+            }
+        }
+    }
+    
+    private var placeholderArtwork: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(
+                    LinearGradient(
+                        colors: [Color.red.opacity(0.6), Color.pink.opacity(0.6)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 56, height: 56)
+            Image(systemName: "music.note.list")
+                .font(.system(size: 24))
+                .foregroundColor(.white)
+        }
     }
 }
 

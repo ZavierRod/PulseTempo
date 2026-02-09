@@ -29,7 +29,6 @@ struct InSyncLogo: View {
             .resizable()
             .aspectRatio(contentMode: .fit)
             .frame(width: size.width)
-            .offset(x: size.width * 0.06) // Compensate for heart on left side
     }
 }
 

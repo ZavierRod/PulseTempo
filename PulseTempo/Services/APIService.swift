@@ -188,8 +188,9 @@ class APIService {
         return try await performRequest(request)
     }
     
-    /// Perform the actual network request and handle response
-    private func performRequest<T: Decodable>(_ request: URLRequest) async throws -> T {
+    /// Perform the actual network request and handle response.
+    /// On 401/403 (expired token), automatically attempts a token refresh and retries once.
+    private func performRequest<T: Decodable>(_ request: URLRequest, isRetry: Bool = false) async throws -> T {
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             
@@ -208,8 +209,19 @@ class APIService {
                     throw APIError.decodingError(error.localizedDescription)
                 }
                 
-            case 401:
-                // Token expired - could implement refresh here
+            case 401, 403:
+                // Token expired or invalid — attempt refresh once
+                if !isRetry {
+                    print("🔐 [API] Token rejected (\(httpResponse.statusCode)) — attempting refresh...")
+                    let refreshed = await AuthService.shared.refreshTokens()
+                    if refreshed, let newToken = keychainManager.getAccessToken() {
+                        // Rebuild the request with the new token and retry
+                        var retryRequest = request
+                        retryRequest.setValue("Bearer \(newToken)", forHTTPHeaderField: "Authorization")
+                        return try await performRequest(retryRequest, isRetry: true)
+                    }
+                }
+                // Refresh failed or this was already a retry
                 throw APIError.notAuthenticated
                 
             default:

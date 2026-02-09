@@ -113,90 +113,185 @@ struct ActiveRunView: View {
                     dismiss()
                 }
             )
+            .interactiveDismissDisabled()
         }
         // Workout Controls Sheet
         .sheet(isPresented: $showingControlsSheet) {
-            VStack(spacing: 20) {
-                // Handle indicator
-                Capsule()
-                    .fill(Color.gray.opacity(0.3))
-                    .frame(width: 40, height: 5)
-                    .padding(.top, 10)
+            ZStack {
+                // Background matching the app
+                GradientBackground()
                 
-                Text("WORKOUT CONTROLS")
-                    .font(.custom("BebasNeue-Regular", size: 24))
-                    .foregroundColor(.primary)
-                    .padding(.bottom, 10)
-                
-                // Finish Button (Main Action)
-                Button(action: {
-                    showingControlsSheet = false
-                    runSessionVM.finishRun()
-                }) {
-                    HStack {
-                        Image(systemName: "flag.checkered")
-                        Text("FINISH WORKOUT")
+                VStack(spacing: 20) {
+                    // Handle indicator
+                    Capsule()
+                        .fill(Color.white.opacity(0.2))
+                        .frame(width: 36, height: 4)
+                        .padding(.top, 12)
+                    
+                    // Now Playing controls
+                    VStack(spacing: 14) {
+                        // Track title/artist (if available)
+                        if let track = runSessionVM.currentTrack {
+                            VStack(spacing: 4) {
+                                Text(track.title)
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.white)
+                                    .lineLimit(1)
+                                Text(track.artist)
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.white.opacity(0.5))
+                                    .lineLimit(1)
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                        
+                        // Progress bar (shows progress if duration available)
+                        if let track = runSessionVM.currentTrack, track.durationSeconds > 0 {
+                            VStack(spacing: 6) {
+                                ProgressView(value: runSessionVM.currentPlaybackTime, total: Double(track.durationSeconds))
+                                    .progressViewStyle(LinearProgressViewStyle())
+                                    .tint(.white.opacity(0.6))
+                                    .frame(maxWidth: .infinity)
+                                HStack {
+                                    Text(formatTime(runSessionVM.currentPlaybackTime))
+                                        .font(.caption2)
+                                        .foregroundColor(.white.opacity(0.4))
+                                    Spacer()
+                                    let remaining = max(0, Double(track.durationSeconds) - runSessionVM.currentPlaybackTime)
+                                    Text("-\(formatTime(remaining))")
+                                        .font(.caption2)
+                                        .foregroundColor(.white.opacity(0.4))
+                                }
+                            }
+                        } else {
+                            ProgressView()
+                                .progressViewStyle(LinearProgressViewStyle())
+                                .tint(.white.opacity(0.4))
+                                .frame(maxWidth: .infinity)
+                        }
+                        
+                        // Transport controls (back, play/pause, next)
+                        HStack(spacing: 44) {
+                            Button(action: { runSessionVM.skipToPreviousTrack() }) {
+                                Image(systemName: "backward.fill")
+                                    .font(.title3)
+                                    .foregroundColor(.white.opacity(0.8))
+                            }
+                            
+                            Button(action: { runSessionVM.toggleMusicPlayPause() }) {
+                                Image(systemName: runSessionVM.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                                    .font(.system(size: 50))
+                                    .foregroundColor(.white)
+                            }
+                            
+                            Button(action: { runSessionVM.skipToNextTrack() }) {
+                                Image(systemName: "forward.fill")
+                                    .font(.title3)
+                                    .foregroundColor(.white.opacity(0.8))
+                            }
+                        }
+                        .padding(.top, 2)
                     }
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.green)
-                    .cornerRadius(12)
-                }
-                
-                // Pause/Resume Button
-                Button(action: {
-                    runSessionVM.togglePlayPause()
-                    // Keep sheet open so they can see status change, or close it?
-                    // Usually better to keep open or show status
-                    showingControlsSheet = false
-                }) {
-                    HStack {
-                        Image(systemName: runSessionVM.isPlaying ? "pause.fill" : "play.fill")
-                        Text(runSessionVM.isPlaying ? "PAUSE WORKOUT" : "RESUME WORKOUT")
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.white.opacity(0.08))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                            )
+                    )
+                    
+                    // Workout action buttons
+                    HStack(spacing: 12) {
+                        // Quit
+                        Button(action: {
+                            showingControlsSheet = false
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                showingQuitConfirmation = true
+                            }
+                        }) {
+                            VStack(spacing: 6) {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 18, weight: .medium))
+                                    .foregroundColor(.red.opacity(0.9))
+                                Text("Quit")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.7))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 64)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(Color.white.opacity(0.06))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 14)
+                                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                    )
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        
+                        // Pause / Resume Workout (workout timer only - music unaffected)
+                        Button(action: {
+                            runSessionVM.toggleWorkoutPause()
+                            showingControlsSheet = false
+                        }) {
+                            VStack(spacing: 6) {
+                                Image(systemName: runSessionVM.isWorkoutPaused ? "figure.run" : "pause.fill")
+                                    .font(.system(size: 18, weight: .medium))
+                                    .foregroundColor(.white)
+                                Text(runSessionVM.isWorkoutPaused ? "Resume" : "Pause")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.7))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 64)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(Color.white.opacity(runSessionVM.isWorkoutPaused ? 0.12 : 0.06))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 14)
+                                            .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                                    )
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        
+                        // Finish
+                        Button(action: {
+                            showingControlsSheet = false
+                            runSessionVM.finishRun()
+                        }) {
+                            VStack(spacing: 6) {
+                                Image(systemName: "flag.checkered")
+                                    .font(.system(size: 18, weight: .medium))
+                                    .foregroundColor(.white)
+                                Text("Finish")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.7))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 64)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(Color.white.opacity(0.06))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 14)
+                                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                    )
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
                     }
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.yellow) // Or gray/orange depending on design
-                    .cornerRadius(12)
+                    
+                    Spacer()
                 }
-                
-                // Quit Button (Destructive)
-                Button(action: {
-                    showingControlsSheet = false
-                    // Small delay to allow sheet to dismiss before showing alert
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        showingQuitConfirmation = true
-                    }
-                }) {
-                    HStack {
-                        Image(systemName: "xmark.circle.fill")
-                        Text("QUIT WORKOUT")
-                    }
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.red)
-                    .cornerRadius(12)
-                }
-                
-                Spacer()
-                
-                // Close Sheet Button
-                Button("Dismiss") {
-                    showingControlsSheet = false
-                }
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .padding(.bottom, 20)
+                .padding(.horizontal, 16)
             }
-            .padding(.horizontal)
             .presentationDetents([.medium])
-            .presentationDragIndicator(.hidden) // We made our own handle if we want, or use system one using .visible
+            .presentationDragIndicator(.hidden)
         }
         .alert("Quit Workout?", isPresented: $showingQuitConfirmation) {
             Button("Cancel", role: .cancel) { }
@@ -386,9 +481,9 @@ struct ActiveRunView: View {
                     .foregroundColor(.white)
             }
             
-            // Play/Pause
+            // Play/Pause (music only - workout timer unaffected)
             Button(action: {
-                runSessionVM.togglePlayPause()
+                runSessionVM.toggleMusicPlayPause()
             }) {
                 Image(systemName: runSessionVM.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                     .font(.system(size: 72))
@@ -425,84 +520,158 @@ struct WorkoutSummaryView: View {
     let tracksPlayed: [Track]
     let onDismiss: () -> Void
     
+    /// Convenience initializer for displaying a historical WorkoutSummary
+    init(workout: WorkoutSummary, onDismiss: @escaping () -> Void) {
+        self.elapsedTime = TimeInterval(workout.durationMinutes * 60)
+        self.averageHeartRate = workout.averageBPM
+        self.maxHeartRate = 0
+        self.averageCadence = workout.averageCadence
+        self.tracksPlayed = []
+        self.onDismiss = onDismiss
+    }
+    
+    /// Primary initializer used after completing a live workout
+    init(
+        elapsedTime: TimeInterval,
+        averageHeartRate: Int,
+        maxHeartRate: Int,
+        averageCadence: Int,
+        tracksPlayed: [Track],
+        onDismiss: @escaping () -> Void
+    ) {
+        self.elapsedTime = elapsedTime
+        self.averageHeartRate = averageHeartRate
+        self.maxHeartRate = maxHeartRate
+        self.averageCadence = averageCadence
+        self.tracksPlayed = tracksPlayed
+        self.onDismiss = onDismiss
+    }
+    
     var body: some View {
-        NavigationStack {
+        ZStack {
+            // Background matching the app
+            GradientBackground()
+            
             ScrollView {
-                VStack(spacing: 24) {
+                VStack(spacing: 28) {
                     // Header
-                    VStack(spacing: 8) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 60))
-                            .foregroundColor(.green)
+                    VStack(spacing: 10) {
+                        Image(systemName: "checkmark.circle")
+                            .font(.system(size: 48, weight: .thin))
+                            .foregroundColor(.white.opacity(0.8))
                         
-                        Text("Workout Complete!")
-                            .font(.title)
-                            .fontWeight(.bold)
+                        Text("Workout Complete")
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundColor(.white)
+                        
+                        Text(formatTime(elapsedTime))
+                            .font(.system(size: 40, weight: .bold, design: .rounded).monospacedDigit())
+                            .foregroundColor(.white)
                     }
-                    .padding(.top, 20)
+                    .padding(.top, 40)
                     
                     // Stats grid
                     LazyVGrid(columns: [
                         GridItem(.flexible()),
                         GridItem(.flexible())
-                    ], spacing: 16) {
-                        StatCard(title: "Duration", value: formatTime(elapsedTime), icon: "clock.fill", color: .blue)
-                        StatCard(title: "Avg HR", value: "\(averageHeartRate)", icon: "heart.fill", color: .red)
-                        StatCard(title: "Max HR", value: "\(maxHeartRate)", icon: "heart.fill", color: .orange)
-                        StatCard(title: "Avg Cadence", value: "\(averageCadence)", icon: "figure.run", color: .cyan)
-                        StatCard(title: "Tracks", value: "\(tracksPlayed.count)", icon: "music.note.list", color: .purple)
+                    ], spacing: 12) {
+                        StatCard(title: "Avg Heart Rate", value: "\(averageHeartRate)", unit: "BPM", icon: "heart.fill")
+                        if maxHeartRate > 0 {
+                            StatCard(title: "Max Heart Rate", value: "\(maxHeartRate)", unit: "BPM", icon: "heart.fill")
+                        }
+                        StatCard(title: "Avg Cadence", value: "\(averageCadence)", unit: "SPM", icon: "figure.run")
+                        if !tracksPlayed.isEmpty {
+                            StatCard(title: "Tracks Played", value: "\(tracksPlayed.count)", unit: nil, icon: "music.note.list")
+                        }
                     }
-                    .padding(.horizontal)
+                    .padding(.horizontal, 16)
                     
                     // Tracks played section
                     if !tracksPlayed.isEmpty {
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Tracks Played")
-                                .font(.headline)
-                                .padding(.horizontal)
+                            Text("TRACKS")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.white.opacity(0.4))
+                                .tracking(1)
+                                .padding(.horizontal, 20)
                             
-                            ForEach(tracksPlayed.prefix(10)) { track in
-                                HStack {
-                                    AsyncImage(url: track.artworkURL) { image in
-                                        image.resizable()
-                                    } placeholder: {
-                                        Color.gray.opacity(0.3)
+                            VStack(spacing: 0) {
+                                ForEach(Array(tracksPlayed.prefix(10).enumerated()), id: \.element.id) { index, track in
+                                    HStack(spacing: 12) {
+                                        AsyncImage(url: track.artworkURL) { image in
+                                            image.resizable()
+                                                .aspectRatio(contentMode: .fill)
+                                        } placeholder: {
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .fill(Color.white.opacity(0.08))
+                                                .overlay(
+                                                    Image(systemName: "music.note")
+                                                        .font(.caption)
+                                                        .foregroundColor(.white.opacity(0.3))
+                                                )
+                                        }
+                                        .frame(width: 40, height: 40)
+                                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                                        
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(track.title)
+                                                .font(.system(size: 14, weight: .medium))
+                                                .foregroundColor(.white)
+                                                .lineLimit(1)
+                                            Text(track.artist)
+                                                .font(.system(size: 12))
+                                                .foregroundColor(.white.opacity(0.4))
+                                                .lineLimit(1)
+                                        }
+                                        
+                                        Spacer()
+                                        
+                                        if let bpm = track.bpm {
+                                            Text("\(Int(bpm))")
+                                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                                                .foregroundColor(.white.opacity(0.3))
+                                        }
                                     }
-                                    .frame(width: 44, height: 44)
-                                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 10)
                                     
-                                    VStack(alignment: .leading) {
-                                        Text(track.title)
-                                            .font(.subheadline)
-                                            .lineLimit(1)
-                                        Text(track.artist)
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                            .lineLimit(1)
-                                    }
-                                    
-                                    Spacer()
-                                    
-                                    if let bpm = track.bpm {
-                                        Text("\(Int(bpm))")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
+                                    if index < min(tracksPlayed.count, 10) - 1 {
+                                        Divider()
+                                            .background(Color.white.opacity(0.06))
+                                            .padding(.leading, 68)
                                     }
                                 }
-                                .padding(.horizontal)
                             }
+                            .background(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(Color.white.opacity(0.06))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 14)
+                                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                                    )
+                            )
+                            .padding(.horizontal, 16)
                         }
                     }
-                }
-                .padding(.bottom, 40)
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        onDismiss()
+                    
+                    // Done button
+                    Button(action: { onDismiss() }) {
+                        Text("Done")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 50)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(Color.white.opacity(0.1))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 14)
+                                            .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                                    )
+                            )
                     }
-                    .fontWeight(.semibold)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 40)
                 }
             }
         }
@@ -520,27 +689,41 @@ struct WorkoutSummaryView: View {
 struct StatCard: View {
     let title: String
     let value: String
+    var unit: String? = nil
     let icon: String
-    let color: Color
     
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.title2)
-                .foregroundColor(color)
+                .font(.system(size: 16))
+                .foregroundColor(.white.opacity(0.4))
             
-            Text(value)
-                .font(.title2)
-                .fontWeight(.bold)
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                Text(value)
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                
+                if let unit = unit {
+                    Text(unit)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.white.opacity(0.35))
+                }
+            }
             
             Text(title)
-                .font(.caption)
-                .foregroundColor(.secondary)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.white.opacity(0.4))
         }
         .frame(maxWidth: .infinity)
-        .padding()
-        .background(Color(.systemGray6))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(.vertical, 16)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color.white.opacity(0.06))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
+        )
     }
 }
 

@@ -14,6 +14,9 @@ struct RunHistoryView: View {
     
     @ObservedObject var viewModel: HomeViewModel
     
+    /// Selected workout to view summary
+    @State private var selectedWorkout: WorkoutSummary?
+    
     // MARK: - Body
     
     var body: some View {
@@ -33,6 +36,11 @@ struct RunHistoryView: View {
             .navigationBarTitleDisplayMode(.large)
             .onAppear {
                 viewModel.refreshRunHistory()
+            }
+            .sheet(item: $selectedWorkout) { workout in
+                WorkoutSummaryView(workout: workout, onDismiss: {
+                    selectedWorkout = nil
+                })
             }
         }
     }
@@ -61,7 +69,10 @@ struct RunHistoryView: View {
         ScrollView {
             LazyVStack(spacing: 12) {
                 ForEach(viewModel.runHistory) { workout in
-                    RunHistoryCard(workout: workout)
+                    Button(action: { selectedWorkout = workout }) {
+                        RunHistoryCard(workout: workout)
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
             }
             .padding(16)

@@ -289,6 +289,47 @@ class AuthService: ObservableObject {
         return keychainManager.getRefreshToken()
     }
     
+    // MARK: - Token Refresh
+    
+    /// Attempt to refresh the access token using the stored refresh token.
+    /// Returns `true` if new tokens were saved successfully, `false` otherwise.
+    /// On failure the user is logged out so they can re-authenticate.
+    func refreshTokens() async -> Bool {
+        guard let refreshToken = keychainManager.getRefreshToken() else {
+            print("🔐 [Auth] No refresh token available - logging out")
+            logout()
+            return false
+        }
+        
+        let url = URL(string: "\(baseURL)/api/auth/refresh")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let body: [String: Any] = ["refresh_token": refreshToken]
+        
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 else {
+                print("🔐 [Auth] Token refresh failed - logging out")
+                logout()
+                return false
+            }
+            
+            let tokenResponse = try JSONDecoder().decode(AuthTokenResponse.self, from: data)
+            await handleSuccessfulAuth(tokenResponse: tokenResponse)
+            print("🔐 [Auth] Tokens refreshed successfully")
+            return true
+        } catch {
+            print("🔐 [Auth] Token refresh error: \(error.localizedDescription) - logging out")
+            logout()
+            return false
+        }
+    }
+    
     // MARK: - Private Helpers
     
     /// Handle successful authentication (save tokens, update state)

@@ -291,7 +291,7 @@ struct TrackRow: View {
                             Text("\(bpm) BPM")
                                 .font(.system(size: 12, weight: .medium))
                         }
-                        .foregroundColor(.blue)
+                        .foregroundColor(.red)
                     }
                 }
             }
