@@ -19,11 +19,24 @@ struct ActiveRunView: View {
     @State private var showingQuitConfirmation = false
     @State private var showingControlsSheet = false
     @State private var isAnimatingChevron = false
+    @State private var showingSelectedPlaylists = false
+    @State private var showingAddSongsPicker = false
+    @State private var selectedPlaylistForAdd: MusicPlaylist?
+    @State private var controlsSheetDetent: PresentationDetent = .large
+    @State private var pendingSheet: PendingSheet?
+
+    private let selectedPlaylists: [MusicPlaylist]
+
+    private enum PendingSheet {
+        case playlists
+        case addSongs(MusicPlaylist)
+    }
     
     // MARK: - Initialization
     
-    init(tracks: [Track], runMode: RunMode) {
+    init(tracks: [Track], runMode: RunMode, selectedPlaylists: [MusicPlaylist] = []) {
         _runSessionVM = StateObject(wrappedValue: RunSessionViewModel(tracks: tracks, runMode: runMode))
+        self.selectedPlaylists = selectedPlaylists
     }
     
     // MARK: - Body
@@ -202,6 +215,9 @@ struct ActiveRunView: View {
                                     .stroke(Color.white.opacity(0.1), lineWidth: 1)
                             )
                     )
+
+                    // Queue + playlist actions
+                    playlistQueueSection
                     
                     // Workout action buttons
                     HStack(spacing: 12) {
@@ -290,8 +306,37 @@ struct ActiveRunView: View {
                 }
                 .padding(.horizontal, 16)
             }
-            .presentationDetents([.medium])
+            .presentationDetents([.medium, .large], selection: $controlsSheetDetent)
             .presentationDragIndicator(.hidden)
+        }
+        .onChange(of: showingControlsSheet) { _, isPresented in
+            if isPresented {
+                controlsSheetDetent = .large
+            } else {
+                presentPendingSheetIfNeeded()
+            }
+        }
+        .sheet(isPresented: $showingSelectedPlaylists) {
+            SelectedPlaylistsSheet(playlists: selectedPlaylists, onSongsAdded: { addedTracks in
+                runSessionVM.addTracksToWorkout(addedTracks)
+            })
+        }
+        .sheet(item: $selectedPlaylistForAdd) { playlist in
+            MusicSearchView(playlistId: playlist.id) { addedTracks in
+                runSessionVM.addTracksToWorkout(addedTracks)
+                persistPendingTracks(addedTracks, playlistId: playlist.id)
+            }
+        }
+        .confirmationDialog(
+            "Add songs to which playlist?",
+            isPresented: $showingAddSongsPicker,
+            titleVisibility: .visible
+        ) {
+            ForEach(selectedPlaylists) { playlist in
+                Button(playlist.name) {
+                    queueSheet(.addSongs(playlist))
+                }
+            }
         }
         .alert("Quit Workout?", isPresented: $showingQuitConfirmation) {
             Button("Cancel", role: .cancel) { }
@@ -500,6 +545,90 @@ struct ActiveRunView: View {
             }
         }
     }
+
+    // MARK: - Playlist + Queue Section
+
+    private var playlistQueueSection: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Text("Up Next")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.8))
+                Spacer()
+                Button(action: { queueSheet(.playlists) }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "music.note.list")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("Playlists")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color.white.opacity(0.15))
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+
+            if let nextTrack = runSessionVM.queuedNextTrack {
+                VStack(spacing: 2) {
+                    Text(nextTrack.title)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    Text(nextTrack.artist)
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.6))
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                Text("Queue adapting to your pace...")
+                    .font(.system(size: 12))
+                    .foregroundColor(.white.opacity(0.6))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            Button(action: {
+                guard !selectedPlaylists.isEmpty else { return }
+                if selectedPlaylists.count == 1 {
+                    queueSheet(.addSongs(selectedPlaylists[0]))
+                } else {
+                    showingAddSongsPicker = true
+                }
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 12, weight: .bold))
+                    Text("Add Songs")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(selectedPlaylists.isEmpty ? Color.white.opacity(0.08) : Color.white.opacity(0.2))
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
+            .disabled(selectedPlaylists.isEmpty)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.white.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                )
+        )
+        .padding(.horizontal, 20)
+    }
     
     // MARK: - Helpers
     
@@ -507,6 +636,79 @@ struct ActiveRunView: View {
         let minutes = Int(interval) / 60
         let seconds = Int(interval) % 60
         return String(format: "%02d:%02d", minutes, seconds)
+    }
+
+    // MARK: - Sheet Routing
+
+    private func queueSheet(_ sheet: PendingSheet) {
+        if showingControlsSheet {
+            pendingSheet = sheet
+            showingControlsSheet = false
+        } else {
+            pendingSheet = sheet
+            presentPendingSheetIfNeeded()
+        }
+    }
+
+    private func presentPendingSheetIfNeeded() {
+        guard let pending = pendingSheet else { return }
+        pendingSheet = nil
+        DispatchQueue.main.async {
+            switch pending {
+            case .playlists:
+                showingSelectedPlaylists = true
+            case .addSongs(let playlist):
+                selectedPlaylistForAdd = playlist
+            }
+        }
+    }
+
+    // MARK: - Pending Track Persistence
+
+    private func pendingTracksKey(for playlistId: String) -> String {
+        "pendingTracks_\(playlistId)"
+    }
+
+    private func loadPendingTracks(for playlistId: String) -> [Track] {
+        guard let encoded = UserDefaults.standard.array(forKey: pendingTracksKey(for: playlistId)) as? [[String: String]] else {
+            return []
+        }
+        let bpmCache = UserDefaults.standard.dictionary(forKey: "com.pulsetempo.bpmCache") as? [String: Int] ?? [:]
+        return encoded.compactMap { dict in
+            guard let id = dict["id"], let title = dict["title"], let artist = dict["artist"],
+                  let durationStr = dict["duration"], let duration = Int(durationStr) else { return nil }
+            let artworkURL = dict["artworkURL"].flatMap { $0.isEmpty ? nil : URL(string: $0) }
+            let bpm = bpmCache[id] ?? bpmCache["\(title.lowercased())|\(artist.lowercased())"]
+            return Track(id: id, title: title, artist: artist, durationSeconds: duration, bpm: bpm, artworkURL: artworkURL)
+        }
+    }
+
+    private func savePendingTracks(_ pending: [Track], playlistId: String) {
+        let encoded = pending.map {
+            [
+                "id": $0.id,
+                "title": $0.title,
+                "artist": $0.artist,
+                "duration": String($0.durationSeconds),
+                "artworkURL": $0.artworkURL?.absoluteString ?? ""
+            ]
+        }
+        UserDefaults.standard.set(encoded, forKey: pendingTracksKey(for: playlistId))
+    }
+
+    private func persistPendingTracks(_ addedTracks: [Track], playlistId: String) {
+        guard !addedTracks.isEmpty else { return }
+        var pending = loadPendingTracks(for: playlistId)
+        let existingIds = Set(pending.map { $0.id })
+        let existingTitles = Set(pending.map { "\($0.title.lowercased())|\($0.artist.lowercased())" })
+        for track in addedTracks {
+            let titleKey = "\(track.title.lowercased())|\(track.artist.lowercased())"
+            if existingIds.contains(track.id) || existingTitles.contains(titleKey) {
+                continue
+            }
+            pending.append(track)
+        }
+        savePendingTracks(pending, playlistId: playlistId)
     }
 }
 
@@ -736,4 +938,3 @@ struct ActiveRunView_Previews: PreviewProvider {
     }
 }
 #endif
-

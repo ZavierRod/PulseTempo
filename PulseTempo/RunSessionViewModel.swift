@@ -103,7 +103,7 @@ final class RunSessionViewModel: ObservableObject {
     
     // NEXT TRACK QUEUE MANAGEMENT
     // Per ROADMAP: intelligently select ONE next track that updates as HR changes
-    private var queuedNextTrack: Track?          // The track queued to play next
+    @Published private(set) var queuedNextTrack: Track?  // The track queued to play next
     private var lastQueueUpdateTime: Date?       // Last time queue was updated
     private let queueUpdateThrottleInterval: TimeInterval = 5.0  // Min seconds between updates
 
@@ -393,6 +393,15 @@ final class RunSessionViewModel: ObservableObject {
             )
         ]
     }
+
+    /// Select a random initial track for the start of a workout.
+    /// Keeps the first song varied before the queue algorithm takes over.
+    private func selectRandomInitialTrack() -> Track {
+        guard !tracks.isEmpty else {
+            return createFakeTracks().first!
+        }
+        return tracks.randomElement() ?? tracks[0]
+    }
     
     // ═══════════════════════════════════════════════════════════
     // PUBLIC METHODS - Run Control
@@ -445,17 +454,9 @@ final class RunSessionViewModel: ObservableObject {
         
         // Start music playback with initial track selection
         if !tracks.isEmpty {
-            // Select first track based on mode
-            let initialTrack: Track
-            if runMode == .cadenceMatching {
-                // For cadence mode, start with a track around typical running cadence (170 SPM)
-                initialTrack = selectTrackForCadence(170)
-                print("🏃 Starting workout in Cadence Matching mode")
-            } else {
-                // For heart rate modes, select based on initial heart rate (or default 120 BPM)
-                initialTrack = selectTrackForHeartRate(120)
-                print("💓 Starting workout in \(runMode.displayName) mode")
-            }
+            // Select a random first track to keep workouts feeling fresh
+            let initialTrack = selectRandomInitialTrack()
+            print("Starting workout with random track: '\(initialTrack.title)'")
             
             // Set current track immediately so UI shows it
             queueTrackForPlayback(initialTrack, historyBaseline: [])
@@ -464,6 +465,45 @@ final class RunSessionViewModel: ObservableObject {
         // Timer scheduled on main runloop because RunSessionViewModel is @MainActor
         runTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.updateElapsedTime()
+        }
+    }
+
+    /// Add new tracks to the workout pool (e.g., songs added mid-workout)
+    /// - Parameter newTracks: Tracks to merge into the available pool
+    func addTracksToWorkout(_ newTracks: [Track]) {
+        guard !newTracks.isEmpty else { return }
+
+        navigationQueue.async { [weak self] in
+            guard let self else { return }
+
+            let existingIds = Set(self.tracks.map { $0.id })
+            let existingTitles = Set(self.tracks.map { "\($0.title.lowercased())|\($0.artist.lowercased())" })
+
+            var added: [Track] = []
+            for track in newTracks {
+                let titleKey = "\(track.title.lowercased())|\(track.artist.lowercased())"
+                if existingIds.contains(track.id) || existingTitles.contains(titleKey) {
+                    continue
+                }
+                added.append(track)
+            }
+
+            guard !added.isEmpty else { return }
+            self.tracks.append(contentsOf: added)
+
+            DispatchQueue.main.async {
+                print("Added \(added.count) tracks to workout pool")
+
+                // Optionally refresh the queued track so new songs are considered
+                guard self.sessionState == .active else { return }
+                if self.runMode == .cadenceMatching {
+                    let cadence = self.currentCadence > 0 ? self.currentCadence : 170
+                    self.updateQueuedNextTrackForCadence(cadence)
+                } else {
+                    let hr = self.currentHeartRate > 0 ? self.currentHeartRate : 120
+                    self.updateQueuedNextTrack(hr)
+                }
+            }
         }
     }
     
@@ -660,7 +700,9 @@ final class RunSessionViewModel: ObservableObject {
             self.playTrack(nextTrack)
             
             // Clear queued track since we're manually navigating
-            self.queuedNextTrack = nil
+            DispatchQueue.main.async {
+                self.queuedNextTrack = nil
+            }
         }
     }
     
@@ -688,7 +730,9 @@ final class RunSessionViewModel: ObservableObject {
             self.playTrack(previousTrack, historyBaseline: updatedHistory, playedIdsBaseline: updatedPlayedIds)
             
             // Clear queued track since we're manually navigating
-            self.queuedNextTrack = nil
+            DispatchQueue.main.async {
+                self.queuedNextTrack = nil
+            }
         }
     }
     
@@ -1172,9 +1216,10 @@ private extension RunSessionViewModel {
                  self.queuedNextTrack?.artist.lowercased() == updatedTrack.artist.lowercased())
             
             if isQueuedTrack {
-                self.queuedNextTrack = updatedTrack
+                DispatchQueue.main.async {
+                    self.queuedNextTrack = updatedTrack
+                }
             }
         }
     }
 }
-

@@ -18,6 +18,9 @@ struct PlaylistSongsView: View {
     
     /// Callback when user wants to go back
     var onDismiss: (() -> Void)?
+
+    /// Callback when songs are added (used to update active workout pool)
+    var onSongsAdded: (([Track]) -> Void)? = nil
     
     // MARK: - State
     
@@ -116,6 +119,7 @@ struct PlaylistSongsView: View {
                     }
                 }
                 savePendingTracks(pending)
+                onSongsAdded?(addedTracks)
             }
         }
     }
@@ -445,4 +449,3 @@ struct PlaylistSongsView_Previews: PreviewProvider {
     }
 }
 #endif
-

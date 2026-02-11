@@ -63,7 +63,11 @@ struct HomeView: View {
             }
             .navigationBarHidden(true)
             .fullScreenCover(isPresented: $showingActiveRun) {
-                ActiveRunView(tracks: workoutTracks, runMode: selectedRunMode)
+                ActiveRunView(
+                    tracks: workoutTracks,
+                    runMode: selectedRunMode,
+                    selectedPlaylists: viewModel.selectedPlaylists
+                )
             }
             .sheet(isPresented: $showingSelectedPlaylists) {
                 SelectedPlaylistsSheet(playlists: viewModel.selectedPlaylists)
@@ -430,6 +434,7 @@ struct WorkoutModeButton: View {
 
 struct SelectedPlaylistsSheet: View {
     let playlists: [MusicPlaylist]
+    var onSongsAdded: (([Track]) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var selectedPlaylistForViewing: MusicPlaylist?
     
@@ -530,7 +535,8 @@ struct SelectedPlaylistsSheet: View {
                     playlist: playlist,
                     onDismiss: {
                         selectedPlaylistForViewing = nil
-                    }
+                    },
+                    onSongsAdded: onSongsAdded
                 )
             }
         }
