@@ -69,6 +69,9 @@ class WatchConnectivityManager: NSObject, ObservableObject {
     /// Callback when watch dismisses summary and returns to home
     var onWatchSummaryDismissed: (() -> Void)?
     
+    /// Callback when watch requests BPM lock toggle
+    var onWatchToggleBPMLock: (() -> Void)?
+    
     /// Timestamp of last received heart rate
     @Published var lastHeartRateUpdate: Date?
     
@@ -150,6 +153,26 @@ class WatchConnectivityManager: NSObject, ObservableObject {
         
         session.sendMessage(message, replyHandler: nil) { error in
             print("❌ [iOS] Failed to send now playing: \(error.localizedDescription)")
+        }
+    }
+    
+    /// Send BPM lock state to watch (so watch UI stays in sync)
+    func sendBPMLockState(isLocked: Bool, lockedValue: Int?) {
+        guard let session = session, session.isReachable else {
+            print("⚠️ [iOS] Watch not reachable, cannot send BPM lock state")
+            return
+        }
+        
+        var message: [String: Any] = [
+            "type": "bpmLockState",
+            "isLocked": isLocked
+        ]
+        if let value = lockedValue {
+            message["lockedValue"] = value
+        }
+        
+        session.sendMessage(message, replyHandler: nil) { error in
+            print("❌ [iOS] Failed to send BPM lock state: \(error.localizedDescription)")
         }
     }
     
@@ -263,6 +286,8 @@ extension WatchConnectivityManager: WCSessionDelegate {
             switch action {
             case "dismissSummary":
                 self.onWatchSummaryDismissed?()
+            case "toggleBPMLock":
+                self.onWatchToggleBPMLock?()
             default:
                 print("⚠️ [iOS] Unknown command from watch: \(action)")
             }

@@ -176,6 +176,22 @@ struct ContentView: View {
             }
             .font(.bebasNeueCaption)
             
+            // BPM Lock indicator
+            if connectivityManager.isBPMLocked {
+                HStack(spacing: 3) {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 9))
+                    if let value = connectivityManager.lockedBPMValue {
+                        Text("Locked \(value)")
+                    } else {
+                        Text("Locked")
+                    }
+                }
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(.yellow)
+                .padding(.top, 2)
+            }
+            
             Spacer()
             
             // Swipe hint arrow
@@ -234,6 +250,23 @@ struct ContentView: View {
                 .tint(.gray)
                 .buttonStyle(.borderedProminent)
             }
+            
+            // BPM Lock button (yellow when locked, grey when unlocked)
+            Button(action: {
+                connectivityManager.sendToggleBPMLockCommand()
+            }) {
+                HStack {
+                    Image(systemName: connectivityManager.isBPMLocked ? "lock.fill" : "lock.open")
+                    if connectivityManager.isBPMLocked, let value = connectivityManager.lockedBPMValue {
+                        Text("Unlock (\(value))")
+                    } else {
+                        Text("Lock BPM")
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .tint(connectivityManager.isBPMLocked ? .yellow : .gray)
+            .buttonStyle(.borderedProminent)
             
             // Stop button (red) - shows confirmation
             Button(action: {
