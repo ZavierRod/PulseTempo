@@ -26,6 +26,10 @@ class PhoneConnectivityManager: NSObject, ObservableObject {
     /// Whether the session is activated and ready
     @Published var isSessionActivated: Bool = false
     
+    /// BPM Lock state (synced from iPhone)
+    @Published var isBPMLocked: Bool = false
+    @Published var lockedBPMValue: Int?
+    
     // MARK: - Private Properties
     
     private var session: WCSession?
@@ -136,6 +140,26 @@ class PhoneConnectivityManager: NSObject, ObservableObject {
         }
         
         print("📤 [Watch] Sent dismiss summary command to iPhone")
+    }
+    
+    /// Send toggle BPM lock command to iPhone
+    func sendToggleBPMLockCommand() {
+        guard let session = session, session.isReachable else {
+            print("⚠️ [Watch] iPhone not reachable, cannot toggle BPM lock")
+            return
+        }
+        
+        let message: [String: Any] = [
+            "type": "command",
+            "action": "toggleBPMLock",
+            "timestamp": Date().timeIntervalSince1970
+        ]
+        
+        session.sendMessage(message, replyHandler: nil) { error in
+            print("❌ [Watch] Failed to send BPM lock toggle: \(error.localizedDescription)")
+        }
+        
+        print("📤 [Watch] Sent toggle BPM lock command to iPhone")
     }
     
     // MARK: - Workout Request (Bidirectional Sync)
@@ -285,6 +309,8 @@ extension PhoneConnectivityManager: WCSessionDelegate {
             if let title = message["title"] as? String {
                 print("🎵 [Watch] Now playing: \(title)")
             }
+        case "bpmLockState":
+            handleBPMLockStateMessage(message)
         default:
             print("⚠️ [Watch] Unknown message type: \(type)")
         }
@@ -342,5 +368,19 @@ extension PhoneConnectivityManager: WCSessionDelegate {
             object: nil,
             userInfo: ["action": action]
         )
+    }
+    
+    /// Handle BPM lock state update from iPhone
+    private func handleBPMLockStateMessage(_ message: [String: Any]) {
+        guard let isLocked = message["isLocked"] as? Bool else { return }
+        let lockedValue = message["lockedValue"] as? Int
+        
+        DispatchQueue.main.async {
+            self.isBPMLocked = isLocked
+            self.lockedBPMValue = lockedValue
+        }
+        
+        let status = isLocked ? "LOCKED at \(lockedValue ?? 0)" : "UNLOCKED"
+        print("🔒 [Watch] BPM lock state updated: \(status)")
     }
 }

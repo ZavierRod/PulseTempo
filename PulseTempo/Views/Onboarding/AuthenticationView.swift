@@ -30,6 +30,8 @@ struct AuthenticationView: View {
     
     @State private var mode: AuthenticationMode = .signUp
     @State private var email: String = ""
+    @State private var username: String = ""
+    @State private var loginIdentifier: String = ""  // Email or username for login
     @State private var password: String = ""
     @State private var confirmPassword: String = ""
     @State private var firstName: String = ""
@@ -40,7 +42,7 @@ struct AuthenticationView: View {
     @FocusState private var focusedField: Field?
     
     private enum Field {
-        case email, password, confirmPassword, firstName, lastName
+        case email, username, loginIdentifier, password, confirmPassword, firstName, lastName
     }
     
     // MARK: - Body
@@ -116,8 +118,8 @@ struct AuthenticationView: View {
     
     private var formFields: some View {
         VStack(spacing: 16) {
-            // Name fields (sign up only)
             if mode == .signUp {
+                // Name fields (sign up only)
                 HStack(spacing: 12) {
                     CustomTextField(
                         placeholder: "First name",
@@ -137,18 +139,40 @@ struct AuthenticationView: View {
                     )
                     .focused($focusedField, equals: .lastName)
                 }
+                
+                // Username field (sign up only)
+                CustomTextField(
+                    placeholder: "Username",
+                    text: $username,
+                    icon: "at",
+                    keyboardType: .default,
+                    textContentType: .username,
+                    autocapitalization: .never
+                )
+                .focused($focusedField, equals: .username)
+                
+                // Email field (sign up only)
+                CustomTextField(
+                    placeholder: "Email",
+                    text: $email,
+                    icon: "envelope",
+                    keyboardType: .emailAddress,
+                    textContentType: .emailAddress,
+                    autocapitalization: .never
+                )
+                .focused($focusedField, equals: .email)
+            } else {
+                // Login: email or username
+                CustomTextField(
+                    placeholder: "Email or username",
+                    text: $loginIdentifier,
+                    icon: "person.circle",
+                    keyboardType: .default,
+                    textContentType: .username,
+                    autocapitalization: .never
+                )
+                .focused($focusedField, equals: .loginIdentifier)
             }
-            
-            // Email field
-            CustomTextField(
-                placeholder: "Email",
-                text: $email,
-                icon: "envelope",
-                keyboardType: .emailAddress,
-                textContentType: .emailAddress,
-                autocapitalization: .never
-            )
-            .focused($focusedField, equals: .email)
             
             // Password field
             CustomSecureField(
@@ -241,14 +265,16 @@ struct AuthenticationView: View {
     // MARK: - Computed Properties
     
     private var isFormValid: Bool {
-        let emailValid = !email.isEmpty && email.contains("@")
         let passwordValid = password.count >= 6
         
         if mode == .signUp {
+            let emailValid = !email.isEmpty && email.contains("@")
+            let usernameValid = username.count >= 3
             let passwordsMatch = password == confirmPassword
-            return emailValid && passwordValid && passwordsMatch
+            return emailValid && usernameValid && passwordValid && passwordsMatch
         } else {
-            return emailValid && passwordValid
+            let identifierValid = !loginIdentifier.isEmpty
+            return identifierValid && passwordValid
         }
     }
     
@@ -270,6 +296,11 @@ struct AuthenticationView: View {
             return
         }
         
+        if mode == .signUp && username.count < 3 {
+            localError = "Username must be at least 3 characters"
+            return
+        }
+        
         // Perform auth
         Task {
             do {
@@ -277,13 +308,16 @@ struct AuthenticationView: View {
                     try await authService.register(
                         email: email,
                         password: password,
+                        username: username,
                         firstName: firstName.isEmpty ? nil : firstName,
                         lastName: lastName.isEmpty ? nil : lastName
                     )
                 } else {
-                    try await authService.login(email: email, password: password)
+                    try await authService.login(
+                        identifier: loginIdentifier,
+                        password: password
+                    )
                 }
-                // Call onAuthenticated directly after successful auth
                 await MainActor.run {
                     onAuthenticated()
                 }

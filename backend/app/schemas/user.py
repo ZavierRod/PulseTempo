@@ -5,6 +5,7 @@ from datetime import datetime
 
 class UserBase(BaseModel):
     email: Optional[str] = None
+    username: Optional[str] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
 
@@ -16,12 +17,13 @@ class UserCreateApple(UserBase):
 class UserCreateEmail(BaseModel):
     email: EmailStr
     password: str
+    username: str
     first_name: Optional[str] = None
     last_name: Optional[str] = None
 
-# For Email login
+# For login (supports email or username)
 class UserLoginEmail(BaseModel):
-    email: EmailStr
+    identifier: str  # Can be email or username
     password: str
 
 # Legacy alias for backwards compatibility
@@ -45,6 +47,7 @@ class UserResponse(BaseModel):
     """User info returned to client (no sensitive data)"""
     id: UUID
     email: Optional[str] = None
+    username: Optional[str] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     created_at: datetime

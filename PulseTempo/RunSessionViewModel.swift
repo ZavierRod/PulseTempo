@@ -52,6 +52,12 @@ final class RunSessionViewModel: ObservableObject {
     @Published var elapsedTime: TimeInterval = 0                // Time since run started (seconds)
     @Published var isWorkoutPaused: Bool = false                // Is the workout timer paused? (independent of music)
     
+    // BPM LOCK STATE
+    // When locked, the queue algorithm uses the frozen HR/cadence instead of real-time values
+    @Published var isBPMLocked: Bool = false
+    @Published var lockedHeartRate: Int?          // HR value captured at lock time
+    @Published var lockedCadence: Int?            // Cadence value captured at lock time
+    
     /// Whether to show the workout summary (after finish)
     @Published var showingSummary: Bool = false
     
@@ -203,8 +209,10 @@ final class RunSessionViewModel: ObservableObject {
                     }
                     
                     // If in cadence matching mode, update queued track based on cadence
+                    // Use locked cadence when BPM is locked, otherwise use real-time
                     if self.runMode == .cadenceMatching {
-                        self.updateQueuedNextTrackForCadence(cadence)
+                        let targetCadence = self.lockedCadence ?? cadence
+                        self.updateQueuedNextTrackForCadence(targetCadence)
                     }
                 }
             }
@@ -324,6 +332,15 @@ final class RunSessionViewModel: ObservableObject {
                     self.dismissSummary(sendToWatch: false)  // Don't send back to watch
                     print("🏠 [iOS] Synced summary dismiss from watch")
                 }
+            }
+        }
+        
+        // Watch toggled BPM lock
+        watchConnectivityManager.onWatchToggleBPMLock = { [weak self] in
+            guard let self = self else { return }
+            Task { @MainActor in
+                self.toggleBPMLock()
+                print("🔒 [iOS] Synced BPM lock toggle from watch")
             }
         }
     }
@@ -497,10 +514,10 @@ final class RunSessionViewModel: ObservableObject {
                 // Optionally refresh the queued track so new songs are considered
                 guard self.sessionState == .active else { return }
                 if self.runMode == .cadenceMatching {
-                    let cadence = self.currentCadence > 0 ? self.currentCadence : 170
+                    let cadence = self.lockedCadence ?? (self.currentCadence > 0 ? self.currentCadence : 170)
                     self.updateQueuedNextTrackForCadence(cadence)
                 } else {
-                    let hr = self.currentHeartRate > 0 ? self.currentHeartRate : 120
+                    let hr = self.lockedHeartRate ?? (self.currentHeartRate > 0 ? self.currentHeartRate : 120)
                     self.updateQueuedNextTrack(hr)
                 }
             }
@@ -677,6 +694,42 @@ final class RunSessionViewModel: ObservableObject {
         }
     }
     
+    /// Toggle BPM lock state
+    /// When locked, the queue algorithm uses the frozen HR/cadence value from when
+    /// the user tapped lock, instead of real-time values. This prevents low-energy
+    /// tracks from being queued during rest periods (stoplights, between gym sets).
+    func toggleBPMLock() {
+        isBPMLocked.toggle()
+        
+        if isBPMLocked {
+            // Capture current HR and cadence at lock time
+            lockedHeartRate = currentHeartRate > 0 ? currentHeartRate : nil
+            lockedCadence = currentCadence > 0 ? currentCadence : nil
+            let lockedValue = runMode == .cadenceMatching
+                ? "\(lockedCadence ?? 0) SPM"
+                : "\(lockedHeartRate ?? 0) BPM"
+            print("🔒 BPM Locked at \(lockedValue)")
+        } else {
+            // Clear frozen values
+            lockedHeartRate = nil
+            lockedCadence = nil
+            print("🔓 BPM Unlocked - resuming real-time tracking")
+            
+            // Immediately refresh queue with current real-time values
+            if sessionState == .active {
+                if runMode == .cadenceMatching {
+                    updateQueuedNextTrackForCadence(currentCadence > 0 ? currentCadence : 170)
+                } else {
+                    updateQueuedNextTrack(currentHeartRate)
+                }
+            }
+        }
+        
+        // Sync lock state to watch
+        let syncValue = runMode == .cadenceMatching ? lockedCadence : lockedHeartRate
+        watchConnectivityManager.sendBPMLockState(isLocked: isBPMLocked, lockedValue: syncValue)
+    }
+    
     /// Skip to next track
     /// Per ROADMAP: User manually skips forward - this is one of two ways queued track plays
     /// (The other is when current song ends naturally)
@@ -690,11 +743,12 @@ final class RunSessionViewModel: ObservableObject {
 
             let nextTrack: Track
             if self.runMode == .cadenceMatching {
-                // In cadence mode, select based on current cadence
-                nextTrack = self.selectTrackForCadence(self.currentCadence > 0 ? self.currentCadence : 170)
+                // In cadence mode, select based on cadence (respect lock)
+                let cadence = self.lockedCadence ?? (self.currentCadence > 0 ? self.currentCadence : 170)
+                nextTrack = self.selectTrackForCadence(cadence)
             } else {
-                // In heart rate modes, select based on heart rate
-                let targetHeartRate = approximateHeartRate ?? self.currentHeartRate
+                // In heart rate modes, select based on heart rate (respect lock)
+                let targetHeartRate = self.lockedHeartRate ?? approximateHeartRate ?? self.currentHeartRate
                 nextTrack = self.selectTrackForHeartRate(targetHeartRate)
             }
             self.playTrack(nextTrack)
@@ -765,7 +819,9 @@ final class RunSessionViewModel: ObservableObject {
         if runMode != .cadenceMatching {
             // Update queued next track based on HR changes
             // Per ROADMAP: Never interrupt current song, queue intelligently updates
-            updateQueuedNextTrack(heartRate)
+            // Use locked HR when BPM is locked, otherwise use real-time
+            let targetHR = lockedHeartRate ?? heartRate
+            updateQueuedNextTrack(targetHR)
         }
     }
     

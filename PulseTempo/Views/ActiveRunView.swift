@@ -275,6 +275,33 @@ struct ActiveRunView: View {
                         }
                         .buttonStyle(PlainButtonStyle())
                         
+                        // BPM Lock (freeze target HR/cadence for queue)
+                        Button(action: {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                runSessionVM.toggleBPMLock()
+                            }
+                        }) {
+                            VStack(spacing: 6) {
+                                Image(systemName: runSessionVM.isBPMLocked ? "lock.fill" : "lock.open")
+                                    .font(.system(size: 18, weight: .medium))
+                                    .foregroundColor(runSessionVM.isBPMLocked ? .yellow : .white)
+                                Text(runSessionVM.isBPMLocked ? "Unlock" : "Lock")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.7))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 64)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(runSessionVM.isBPMLocked ? Color.yellow.opacity(0.12) : Color.white.opacity(0.06))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 14)
+                                            .stroke(Color.white.opacity(runSessionVM.isBPMLocked ? 0.2 : 0.1), lineWidth: 1)
+                                    )
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        
                         // Finish
                         Button(action: {
                             showingControlsSheet = false
@@ -544,6 +571,25 @@ struct ActiveRunView: View {
                     .foregroundColor(.white)
             }
         }
+        .overlay(alignment: .trailing) {
+            // BPM Lock button — positioned to the right of controls
+            Button(action: {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    runSessionVM.toggleBPMLock()
+                }
+            }) {
+                Image(systemName: runSessionVM.isBPMLocked ? "lock.fill" : "lock.open")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(runSessionVM.isBPMLocked ? .yellow : .white.opacity(0.6))
+                    .frame(width: 40, height: 40)
+                    .background(
+                        Circle()
+                            .fill(runSessionVM.isBPMLocked ? Color.yellow.opacity(0.15) : Color.white.opacity(0.08))
+                    )
+                    .scaleEffect(runSessionVM.isBPMLocked ? 1.1 : 1.0)
+            }
+            .offset(x: 56)
+        }
     }
 
     // MARK: - Playlist + Queue Section
@@ -554,6 +600,28 @@ struct ActiveRunView: View {
                 Text("Up Next")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.white.opacity(0.8))
+                
+                // BPM Lock indicator
+                if runSessionVM.isBPMLocked {
+                    HStack(spacing: 3) {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 9, weight: .bold))
+                        let lockedValue = runSessionVM.runMode == .cadenceMatching
+                            ? "\(runSessionVM.lockedCadence ?? 0) SPM"
+                            : "\(runSessionVM.lockedHeartRate ?? 0) BPM"
+                        Text("Locked at \(lockedValue)")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                    .foregroundColor(.yellow)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(
+                        Capsule()
+                            .fill(Color.yellow.opacity(0.15))
+                    )
+                    .transition(.opacity.combined(with: .scale))
+                }
+                
                 Spacer()
                 Button(action: { queueSheet(.playlists) }) {
                     HStack(spacing: 4) {

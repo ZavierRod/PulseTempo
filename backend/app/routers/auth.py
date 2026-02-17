@@ -23,7 +23,8 @@ def register_with_email(
     db: Session = Depends(deps.get_db)
 ):
     """
-    Register a new user with email and password.
+    Register a new user with email, username, and password.
+    Username must be unique.
     """
     # Check if email already exists
     existing_user = crud_user.get_by_email(db, email=user_in.email)
@@ -31,6 +32,14 @@ def register_with_email(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="An account with this email already exists"
+        )
+
+    # Check if username already taken
+    existing_username = crud_user.get_by_username(db, username=user_in.username)
+    if existing_username:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This username is already taken"
         )
 
     # Create user
@@ -53,14 +62,15 @@ def login_with_email(
     db: Session = Depends(deps.get_db)
 ):
     """
-    Login with email and password.
+    Login with email or username and password.
+    The 'identifier' field accepts either an email address or a username.
     """
-    user = crud_user.authenticate_email(
-        db, email=login_in.email, password=login_in.password)
+    user = crud_user.authenticate_by_identifier(
+        db, identifier=login_in.identifier, password=login_in.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password"
+            detail="Incorrect email/username or password"
         )
 
     access_token = security.create_access_token(user.id)
