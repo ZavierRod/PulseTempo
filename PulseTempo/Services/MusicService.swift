@@ -136,6 +136,9 @@ class MusicService: ObservableObject, MusicServiceProtocol {
     /// UserDefaults key for BPM cache persistence
     private static let bpmCacheKey = "com.pulsetempo.bpmCache"
     
+    /// Semaphore to limit concurrent BPM analysis requests (avoids overwhelming backend)
+    private let bpmAnalysisSemaphore = AsyncSemaphore(limit: 4)
+    
     /// Set to track Combine subscriptions
     private var cancellables = Set<AnyCancellable>()
     
@@ -717,31 +720,40 @@ class MusicService: ObservableObject, MusicServiceProtocol {
                 
                 if triggerBPMAnalysis {
                     let tracksNeedingAnalysis = tracks.filter { $0.bpm == nil }
-                    print("🔍 Triggering BPM analysis for \(tracksNeedingAnalysis.count) tracks...")
-                    var tracksWithPreviews = 0
-                    
-                    for track in tracksNeedingAnalysis {
-                        if let trackItem = tracksResponse.data.first(where: { $0.id == track.id }) {
-                            // Try to get preview from library item first, then fallback to catalog item
-                            var previewUrl = trackItem.attributes.previews?.first?.url
-                            
-                            if previewUrl == nil {
-                                // Check catalog relationship
-                                previewUrl = trackItem.relationships?.catalog?.data?.first?.attributes.previews?.first?.url
-                            }
-                            
-                            if let finalPreviewUrl = previewUrl {
-                                tracksWithPreviews += 1
-                                print("✨ Found preview for '\(track.title)': \(finalPreviewUrl)")
-                                Task {
-                                    await self.analyzeTrackBPM(track: track, previewUrl: finalPreviewUrl)
+                    if tracksNeedingAnalysis.isEmpty {
+                        print("✅ All tracks already have BPM cached")
+                    } else {
+                        print("🔍 Triggering BPM analysis for \(tracksNeedingAnalysis.count) tracks...")
+                        
+                        // Collect tracks with preview URLs
+                        var analysisItems: [(Track, String)] = []
+                        for track in tracksNeedingAnalysis {
+                            if let trackItem = tracksResponse.data.first(where: { $0.id == track.id }) {
+                                var previewUrl = trackItem.attributes.previews?.first?.url
+                                if previewUrl == nil {
+                                    previewUrl = trackItem.relationships?.catalog?.data?.first?.attributes.previews?.first?.url
                                 }
-                            } else {
-                                print("⚠️ No preview URL for '\(track.title)' (checked library and catalog)")
+                                if let finalPreviewUrl = previewUrl {
+                                    print("✨ Found preview for '\(track.title)': \(finalPreviewUrl)")
+                                    analysisItems.append((track, finalPreviewUrl))
+                                } else {
+                                    print("⚠️ No preview URL for '\(track.title)' (checked library and catalog)")
+                                }
+                            }
+                        }
+                        
+                        print("📊 Analysis triggered for \(analysisItems.count)/\(tracksNeedingAnalysis.count) tracks (max 4 concurrent)")
+                        
+                        // Launch throttled analysis tasks using semaphore
+                        let semaphore = self.bpmAnalysisSemaphore
+                        for (track, previewUrl) in analysisItems {
+                            Task {
+                                await semaphore.wait()
+                                await self.analyzeTrackBPM(track: track, previewUrl: previewUrl)
+                                await semaphore.signal()
                             }
                         }
                     }
-                    print("📊 Analysis triggered for \(tracksWithPreviews)/\(tracksNeedingAnalysis.count) tracks")
                 } else {
                     print("ℹ️ BPM analysis skipped (using cached values only)")
                 }
@@ -756,29 +768,48 @@ class MusicService: ObservableObject, MusicServiceProtocol {
         }
     }
     
-    /// Analyze BPM for a track using backend
+    /// Analyze BPM for a track using backend, with retry logic for transient failures.
+    /// Retries up to 3 times with exponential backoff on 500 errors.
     func analyzeTrackBPM(track: Track, previewUrl: String) async {
-        // Use Railway production backend
-        let host = "https://pulsetempo-production.up.railway.app"
-        
-        guard let url = URL(string: "\(host)/api/tracks/analyze") else { return }
+        let maxRetries = 3
         
         await MainActor.run {
             self.analyzingTrackCount += 1
         }
         
-        // Use defer to guarantee analyzingTrackCount is decremented even on early returns
         defer {
             Task { @MainActor in
                 self.analyzingTrackCount -= 1
             }
         }
         
-        print("🔍 Analyzing BPM for track \(track.id)...")
+        for attempt in 1...maxRetries {
+            let success = await performBPMAnalysis(track: track, previewUrl: previewUrl, attempt: attempt)
+            if success { return }
+            
+            if attempt < maxRetries {
+                let delay = Double(attempt) * 2.0  // 2s, 4s backoff
+                print("🔄 Retrying BPM analysis for '\(track.title)' in \(delay)s (attempt \(attempt + 1)/\(maxRetries))...")
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            } else {
+                print("❌ BPM analysis permanently failed for '\(track.title)' after \(maxRetries) attempts")
+            }
+        }
+    }
+    
+    /// Performs a single BPM analysis request. Returns true on success.
+    private func performBPMAnalysis(track: Track, previewUrl: String, attempt: Int) async -> Bool {
+        let host = "https://pulsetempo-production.up.railway.app"
+        guard let url = URL(string: "\(host)/api/tracks/analyze") else { return false }
+        
+        if attempt == 1 {
+            print("🔍 Analyzing BPM for track \(track.id)...")
+        }
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 30
         
         let body: [String: String] = [
             "apple_music_id": track.id,
@@ -789,22 +820,24 @@ class MusicService: ObservableObject, MusicServiceProtocol {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
             let (data, response) = try await URLSession.shared.data(for: request)
             
-            // Check HTTP status code
             if let httpResponse = response as? HTTPURLResponse {
+                if httpResponse.statusCode == 500 || httpResponse.statusCode == 503 || httpResponse.statusCode == 429 {
+                    let responseBody = String(data: data, encoding: .utf8) ?? "Unknown"
+                    print("❌ BPM API returned status \(httpResponse.statusCode) for '\(track.title)': \(responseBody)")
+                    return false  // Retryable error
+                }
                 if httpResponse.statusCode != 200 {
                     let responseBody = String(data: data, encoding: .utf8) ?? "Unknown"
-                    print("❌ BPM API returned status \(httpResponse.statusCode): \(responseBody)")
-                    return
+                    print("❌ BPM API returned status \(httpResponse.statusCode) for '\(track.title)': \(responseBody)")
+                    return true  // Non-retryable error, don't keep trying
                 }
             }
             
-            // Simple decoding of response
             if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                let bpm = json["bpm"] as? Double {
                 let bpmInt = Int(bpm)
                 print("✅ BPM found for \(track.id): \(bpm)")
                 
-                // Create updated track with new BPM (preserving other fields)
                 let updatedTrack = Track(
                     id: track.id,
                     title: track.title,
@@ -815,16 +848,11 @@ class MusicService: ObservableObject, MusicServiceProtocol {
                     isSkipped: track.isSkipped
                 )
                 
-                // Update BPM cache and trackQueue
                 await MainActor.run {
-                    // Cache BPM by track ID for future fetches
                     self.bpmCache[track.id] = bpmInt
-                    
-                    // Also cache by title+artist key for cross-ID matching
                     let titleArtistKey = "\(track.title.lowercased())|\(track.artist.lowercased())"
                     self.bpmCache[titleArtistKey] = bpmInt
                     
-                    // Update by ID or title+artist match
                     if let index = self.trackQueue.firstIndex(where: { 
                         $0.id == updatedTrack.id || 
                         ($0.title.lowercased() == updatedTrack.title.lowercased() && 
@@ -834,12 +862,14 @@ class MusicService: ObservableObject, MusicServiceProtocol {
                         print("📋 Updated trackQueue with BPM: '\(updatedTrack.title)' = \(bpmInt)")
                     }
                     
-                    // Broadcast update to other subscribers
                     self.trackUpdatedSubject.send(updatedTrack)
                 }
+                return true
             }
+            return true  // Got 200 but no BPM in response - don't retry
         } catch {
-            print("❌ BPM Analysis failed: \(error.localizedDescription)")
+            print("❌ BPM Analysis network error for '\(track.title)': \(error.localizedDescription)")
+            return false  // Network error is retryable
         }
     }
     
@@ -1313,4 +1343,37 @@ extension MusicService {
     }
 }
 #endif
+
+// MARK: - Async Semaphore
+
+/// Simple actor-based semaphore to limit concurrency of async tasks.
+/// Used to throttle BPM analysis requests so we don't overwhelm the backend.
+actor AsyncSemaphore {
+    private let limit: Int
+    private var count: Int = 0
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    
+    init(limit: Int) {
+        self.limit = limit
+    }
+    
+    func wait() async {
+        if count < limit {
+            count += 1
+            return
+        }
+        await withCheckedContinuation { continuation in
+            waiters.append(continuation)
+        }
+    }
+    
+    func signal() {
+        if let next = waiters.first {
+            waiters.removeFirst()
+            next.resume()
+        } else {
+            count -= 1
+        }
+    }
+}
 

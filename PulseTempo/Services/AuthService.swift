@@ -22,6 +22,7 @@ import Combine
 struct AuthUser: Codable, Identifiable {
     let id: String
     let email: String?
+    let username: String?
     let firstName: String?
     let lastName: String?
     let createdAt: String?
@@ -29,6 +30,7 @@ struct AuthUser: Codable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case id
         case email
+        case username
         case firstName = "first_name"
         case lastName = "last_name"
         case createdAt = "created_at"
@@ -52,6 +54,7 @@ struct AuthTokenResponse: Codable {
 enum AuthError: LocalizedError {
     case invalidCredentials
     case emailAlreadyExists
+    case usernameAlreadyTaken
     case networkError(String)
     case serverError(String)
     case notAuthenticated
@@ -59,9 +62,11 @@ enum AuthError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidCredentials:
-            return "Incorrect email or password"
+            return "Incorrect email/username or password"
         case .emailAlreadyExists:
             return "An account with this email already exists"
+        case .usernameAlreadyTaken:
+            return "This username is already taken"
         case .networkError(let message):
             return "Network error: \(message)"
         case .serverError(let message):
@@ -111,7 +116,10 @@ class AuthService: ObservableObject {
         if keychainManager.hasTokens {
             isAuthenticated = true
             print("🔐 [Auth] User has stored tokens - authenticated")
-            // Optionally fetch user info here
+            // Fetch user profile in background
+            Task {
+                await fetchCurrentUser()
+            }
         } else {
             isAuthenticated = false
             print("🔐 [Auth] No stored tokens - not authenticated")
@@ -120,15 +128,17 @@ class AuthService: ObservableObject {
     
     // MARK: - Registration
     
-    /// Register a new user with email and password
+    /// Register a new user with email, username, and password
     /// - Parameters:
     ///   - email: User's email address
     ///   - password: User's password
+    ///   - username: User's unique username
     ///   - firstName: Optional first name
     ///   - lastName: Optional last name
     func register(
         email: String,
         password: String,
+        username: String,
         firstName: String? = nil,
         lastName: String? = nil
     ) async throws {
@@ -151,7 +161,8 @@ class AuthService: ObservableObject {
         // Build request body
         var body: [String: Any] = [
             "email": email,
-            "password": password
+            "password": password,
+            "username": username
         ]
         if let firstName = firstName {
             body["first_name"] = firstName
@@ -173,11 +184,13 @@ class AuthService: ObservableObject {
             case 200:
                 let tokenResponse = try JSONDecoder().decode(AuthTokenResponse.self, from: data)
                 await handleSuccessfulAuth(tokenResponse: tokenResponse)
-                print("✅ [Auth] Registration successful for \(email)")
+                print("✅ [Auth] Registration successful for \(email) (@\(username))")
                 
             case 400:
-                // Email already exists
                 throw AuthError.emailAlreadyExists
+                
+            case 409:
+                throw AuthError.usernameAlreadyTaken
                 
             default:
                 let errorBody = String(data: data, encoding: .utf8) ?? "Unknown error"
@@ -200,11 +213,11 @@ class AuthService: ObservableObject {
     
     // MARK: - Login
     
-    /// Login with email and password
+    /// Login with email or username and password
     /// - Parameters:
-    ///   - email: User's email address
+    ///   - identifier: User's email address or username
     ///   - password: User's password
-    func login(email: String, password: String) async throws {
+    func login(identifier: String, password: String) async throws {
         await MainActor.run {
             isLoading = true
             errorMessage = nil
@@ -222,7 +235,7 @@ class AuthService: ObservableObject {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
         let body: [String: Any] = [
-            "email": email,
+            "identifier": identifier,
             "password": password
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -238,7 +251,7 @@ class AuthService: ObservableObject {
             case 200:
                 let tokenResponse = try JSONDecoder().decode(AuthTokenResponse.self, from: data)
                 await handleSuccessfulAuth(tokenResponse: tokenResponse)
-                print("✅ [Auth] Login successful for \(email)")
+                print("✅ [Auth] Login successful for \(identifier)")
                 
             case 401:
                 throw AuthError.invalidCredentials
@@ -330,6 +343,40 @@ class AuthService: ObservableObject {
         }
     }
     
+    // MARK: - User Info
+    
+    /// Fetch the current user's profile from the backend
+    func fetchCurrentUser() async {
+        guard let accessToken = keychainManager.getAccessToken() else { return }
+        
+        let url = URL(string: "\(baseURL)/api/auth/me")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else { return }
+            
+            if httpResponse.statusCode == 200 {
+                let user = try JSONDecoder().decode(AuthUser.self, from: data)
+                await MainActor.run {
+                    self.currentUser = user
+                }
+                print("👤 [Auth] Loaded user: @\(user.username ?? "unknown")")
+            } else if httpResponse.statusCode == 401 {
+                // Token expired, try refresh
+                let refreshed = await refreshTokens()
+                if refreshed {
+                    await fetchCurrentUser()
+                }
+            }
+        } catch {
+            print("⚠️ [Auth] Failed to fetch user info: \(error.localizedDescription)")
+        }
+    }
+    
     // MARK: - Private Helpers
     
     /// Handle successful authentication (save tokens, update state)
@@ -344,6 +391,11 @@ class AuthService: ObservableObject {
         // Update state
         isAuthenticated = true
         errorMessage = nil
+        
+        // Fetch user profile in background
+        Task {
+            await fetchCurrentUser()
+        }
     }
     
     /// Clear error message

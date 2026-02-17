@@ -15,6 +15,7 @@ struct HomeView: View {
     
     @ObservedObject var viewModel: HomeViewModel
     @ObservedObject private var connectivityManager = WatchConnectivityManager.shared
+    @ObservedObject private var authService = AuthService.shared
     
     /// Navigation state
     @State private var showingActiveRun = false
@@ -141,9 +142,15 @@ struct HomeView: View {
     private var headerSection: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Ready to Work Out")
-                    .font(.bebasNeueMedium)
-                    .foregroundColor(.white)
+                if let username = authService.currentUser?.username {
+                    Text("Hey, @\(username)")
+                        .font(.bebasNeueMedium)
+                        .foregroundColor(.white)
+                } else {
+                    Text("Ready to Work Out")
+                        .font(.bebasNeueMedium)
+                        .foregroundColor(.white)
+                }
                 
                 if viewModel.totalTrackCount > 0 {
                     Text("\(viewModel.totalTrackCount) songs ready")

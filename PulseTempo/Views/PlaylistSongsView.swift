@@ -296,14 +296,13 @@ struct PlaylistSongsView: View {
     
     // MARK: - Helper Methods
     
-    /// Fetch tracks from the playlist
+    /// Fetch tracks from the playlist, triggering BPM analysis for any tracks still missing values.
     private func fetchTracks() {
         isLoading = true
         errorMessage = nil
         
-        // Don't trigger BPM analysis when browsing - only analyze when playlist is confirmed for workout
-        // BPM analysis happens in PlaylistSelectionViewModel.getSelectedTracks()
-        musicService.fetchTracksFromPlaylist(playlistId: playlist.id, triggerBPMAnalysis: false) { result in
+        // Trigger BPM analysis for tracks missing BPM (e.g., previously failed due to server errors)
+        musicService.fetchTracksFromPlaylist(playlistId: playlist.id, triggerBPMAnalysis: true) { result in
             DispatchQueue.main.async {
                 isLoading = false
                 

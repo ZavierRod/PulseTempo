@@ -80,13 +80,22 @@ The following environment variables are configured on the Railway PulseTempo ser
 
 ## Running Migrations
 
-Migrations must be run using the **public** database URL (internal URLs only work within Railway's network):
+**Automatic on deploy**: The Dockerfile runs `alembic upgrade head` before starting the app, so migrations are applied automatically on each Railway deployment.
+
+**Manual run** (if needed): Use the Railway CLI with your project linked:
 
 ```bash
 cd backend
+railway login   # if not already logged in
+railway link    # link to your project
+railway run alembic upgrade head
+```
 
-# Using the public TCP proxy
-DATABASE_URL="postgresql://postgres:<PASSWORD>@centerbeam.proxy.rlwy.net:32437/railway" alembic upgrade head
+Or with the public database URL (internal URLs only work within Railway's network):
+
+```bash
+cd backend
+DATABASE_URL="postgresql://postgres:<PASSWORD>@<HOST>:<PORT>/railway" alembic upgrade head
 ```
 
 To find the public proxy details:

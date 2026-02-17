@@ -14,6 +14,7 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=True)
     hashed_password = Column(String, nullable=True)
     # Profile info
+    username = Column(String, unique=True, index=True, nullable=True)
     first_name = Column(String, nullable=True)
     last_name = Column(String, nullable=True)
     # Timestamps

@@ -44,6 +44,7 @@ struct PulseTempoApp: App {
 /// Coordinates navigation between onboarding and main app
 struct AppCoordinator: View {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @StateObject private var authService = AuthService.shared
 
     private let healthKitManager: HealthKitManager
     private let musicKitManager: MusicKitManager
@@ -66,7 +67,7 @@ struct AppCoordinator: View {
 
     var body: some View {
         Group {
-            if hasCompletedOnboarding || shouldBypassOnboarding {
+            if (hasCompletedOnboarding && authService.isAuthenticated) || shouldBypassOnboarding {
                 // Main app view - Tab-based navigation
                 MainTabView()
             } else {
