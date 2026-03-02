@@ -339,26 +339,15 @@ struct PlaylistCard: View {
             .buttonStyle(PlainButtonStyle())
             
             // Playlist artwork or placeholder
-            if let artwork = playlist.artwork,
-               let url = artwork.url(width: 120, height: 120) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 56, height: 56)
-                            .cornerRadius(8)
-                    case .failure(_):
-                        playlistArtworkPlaceholder
-                    case .empty:
-                        ProgressView()
-                            .frame(width: 56, height: 56)
-                    @unknown default:
-                        playlistArtworkPlaceholder
-                    }
-                }
-            } else {
+            CachedAsyncImage(
+                url: playlist.artwork?.url(width: 120, height: 120)
+            ) { image in
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 56, height: 56)
+                    .cornerRadius(8)
+            } placeholder: {
                 playlistArtworkPlaceholder
             }
             

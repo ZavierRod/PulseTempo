@@ -21,6 +21,9 @@ struct PlaylistSongsView: View {
 
     /// Callback when songs are added (used to update active workout pool)
     var onSongsAdded: (([Track]) -> Void)? = nil
+
+    /// When true, skip bulk BPM re-analysis (used during active workouts to reduce XPC load)
+    var skipBPMAnalysis: Bool = false
     
     // MARK: - State
     
@@ -301,8 +304,7 @@ struct PlaylistSongsView: View {
         isLoading = true
         errorMessage = nil
         
-        // Trigger BPM analysis for tracks missing BPM (e.g., previously failed due to server errors)
-        musicService.fetchTracksFromPlaylist(playlistId: playlist.id, triggerBPMAnalysis: true) { result in
+        musicService.fetchTracksFromPlaylist(playlistId: playlist.id, triggerBPMAnalysis: !skipBPMAnalysis) { result in
             DispatchQueue.main.async {
                 isLoading = false
                 
@@ -340,25 +342,13 @@ struct TrackRow: View {
     var body: some View {
         HStack(spacing: 12) {
             // Album artwork or placeholder
-            if let artworkURL = track.artworkURL {
-                AsyncImage(url: artworkURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 50, height: 50)
-                            .cornerRadius(8)
-                    case .failure(_):
-                        artworkPlaceholder
-                    case .empty:
-                        ProgressView()
-                            .frame(width: 50, height: 50)
-                    @unknown default:
-                        artworkPlaceholder
-                    }
-                }
-            } else {
+            CachedAsyncImage(url: track.artworkURL) { image in
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 50, height: 50)
+                    .cornerRadius(8)
+            } placeholder: {
                 artworkPlaceholder
             }
             

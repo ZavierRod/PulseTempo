@@ -103,6 +103,35 @@ struct ActiveRunView: View {
                     }
                 }
         )
+        .overlay {
+            if runSessionVM.playbackInterrupted {
+                VStack(spacing: 12) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(.yellow)
+                    Text("Music playback interrupted")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.white)
+                    Button(action: { runSessionVM.retryPlayback() }) {
+                        Text("Tap to Retry")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 10)
+                            .background(
+                                Capsule().fill(Color.red.opacity(0.8))
+                            )
+                    }
+                }
+                .padding(20)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color.black.opacity(0.85))
+                )
+                .transition(.opacity)
+                .zIndex(100)
+            }
+        }
         .onAppear {
             runSessionVM.startRun()
         }
@@ -346,13 +375,15 @@ struct ActiveRunView: View {
         .sheet(isPresented: $showingSelectedPlaylists) {
             SelectedPlaylistsSheet(playlists: selectedPlaylists, onSongsAdded: { addedTracks in
                 runSessionVM.addTracksToWorkout(addedTracks)
-            })
+            }, isWorkoutContext: true)
         }
         .sheet(item: $selectedPlaylistForAdd) { playlist in
             MusicSearchView(playlistId: playlist.id) { addedTracks in
                 runSessionVM.addTracksToWorkout(addedTracks)
                 persistPendingTracks(addedTracks, playlistId: playlist.id)
             }
+            .onAppear { runSessionVM.isAddingSongs = true }
+            .onDisappear { runSessionVM.isAddingSongs = false }
         }
         .confirmationDialog(
             "Add songs to which playlist?",
@@ -486,7 +517,7 @@ struct ActiveRunView: View {
         VStack(spacing: 12) {
             // Album artwork placeholder
             if let track = runSessionVM.currentTrack {
-                AsyncImage(url: track.artworkURL) { image in
+                CachedAsyncImage(url: track.artworkURL) { image in
                     image
                         .resizable()
                         .aspectRatio(contentMode: .fill)
@@ -868,7 +899,7 @@ struct WorkoutSummaryView: View {
                             VStack(spacing: 0) {
                                 ForEach(Array(tracksPlayed.prefix(10).enumerated()), id: \.element.id) { index, track in
                                     HStack(spacing: 12) {
-                                        AsyncImage(url: track.artworkURL) { image in
+                                        CachedAsyncImage(url: track.artworkURL) { image in
                                             image.resizable()
                                                 .aspectRatio(contentMode: .fill)
                                         } placeholder: {

@@ -74,6 +74,7 @@ final class RunSessionViewModel: ObservableObject {
     
     // ERROR HANDLING
     @Published var errorMessage: String?         // User-friendly error message
+    @Published var playbackInterrupted: Bool = false  // XPC connection lost
     
     // WATCH CONNECTIVITY
     private let watchConnectivityManager = WatchConnectivityManager.shared
@@ -112,6 +113,10 @@ final class RunSessionViewModel: ObservableObject {
     @Published private(set) var queuedNextTrack: Track?  // The track queued to play next
     private var lastQueueUpdateTime: Date?       // Last time queue was updated
     private let queueUpdateThrottleInterval: TimeInterval = 5.0  // Min seconds between updates
+    private let addingSongsThrottleInterval: TimeInterval = 20.0 // Longer throttle while searching
+
+    /// Set to true while the MusicSearch sheet is open to reduce XPC load
+    var isAddingSongs = false
 
     private var lastSkipTimestamps: [NavigationDirection: Date] = [:]
     private let skipDebounceInterval: TimeInterval = 0.3
@@ -244,6 +249,14 @@ final class RunSessionViewModel: ObservableObject {
             }
             .store(in: &cancellables)
         
+        // OBSERVE PLAYBACK INTERRUPTION (XPC connection drops)
+        musicService.playbackInterruptedPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] interrupted in
+                self?.playbackInterrupted = interrupted
+            }
+            .store(in: &cancellables)
+
         // OBSERVE ERRORS FROM SERVICES
         heartRateService.errorPublisher
             .compactMap { $0 }  // Filter out nil values
@@ -483,6 +496,11 @@ final class RunSessionViewModel: ObservableObject {
         runTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.updateElapsedTime()
         }
+    }
+
+    /// Attempt to recover music playback after an XPC interruption
+    func retryPlayback() {
+        musicService.retryPlaybackAfterInterruption()
     }
 
     /// Add new tracks to the workout pool (e.g., songs added mid-workout)
@@ -839,11 +857,10 @@ final class RunSessionViewModel: ObservableObject {
             return
         }
         
-        // Throttle queue updates to prevent excessive rebuilds that disrupt playback
-        // Only allow updates every 5 seconds minimum
+        // Use a longer throttle while MusicSearch is open to reduce XPC pressure
+        let throttle = isAddingSongs ? addingSongsThrottleInterval : queueUpdateThrottleInterval
         if let lastUpdate = lastQueueUpdateTime,
-           Date().timeIntervalSince(lastUpdate) < queueUpdateThrottleInterval {
-            // Too soon since last update, skip this one
+           Date().timeIntervalSince(lastUpdate) < throttle {
             return
         }
         
@@ -984,9 +1001,10 @@ final class RunSessionViewModel: ObservableObject {
             return
         }
         
-        // Throttle queue updates to prevent excessive rebuilds
+        // Use a longer throttle while MusicSearch is open to reduce XPC pressure
+        let throttle = isAddingSongs ? addingSongsThrottleInterval : queueUpdateThrottleInterval
         if let lastUpdate = lastQueueUpdateTime,
-           Date().timeIntervalSince(lastUpdate) < queueUpdateThrottleInterval {
+           Date().timeIntervalSince(lastUpdate) < throttle {
             return
         }
         

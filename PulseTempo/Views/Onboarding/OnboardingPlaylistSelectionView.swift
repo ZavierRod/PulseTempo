@@ -389,27 +389,15 @@ struct OnboardingPlaylistCard: View {
             .buttonStyle(PlainButtonStyle())
             
             // Playlist artwork or placeholder
-            if let artwork = playlist.artwork,
-               let url = artwork.url(width: 120, height: 120) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 56, height: 56)
-                            .cornerRadius(8)
-                    case .failure(_):
-                        onboardingArtworkPlaceholder
-                    case .empty:
-                        ProgressView()
-                            .tint(.white)
-                            .frame(width: 56, height: 56)
-                    @unknown default:
-                        onboardingArtworkPlaceholder
-                    }
-                }
-            } else {
+            CachedAsyncImage(
+                url: playlist.artwork?.url(width: 120, height: 120)
+            ) { image in
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 56, height: 56)
+                    .cornerRadius(8)
+            } placeholder: {
                 onboardingArtworkPlaceholder
             }
             

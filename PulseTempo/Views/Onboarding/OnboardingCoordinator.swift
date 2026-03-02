@@ -186,8 +186,15 @@ struct OnboardingCoordinator: View {
 
     /// Determines whether additional onboarding steps are needed or if we can finish.
     private func reevaluateFlow() {
-        // Don't auto-advance if we're already past permissions
         if currentStep == .playlistSelection {
+            return
+        }
+        
+        // Welcome and authentication are gating steps that require explicit
+        // user interaction -- never auto-advance past them, even when later
+        // permissions (HealthKit / MusicKit) are already granted from a
+        // previous session (e.g. after sign-out).
+        if currentStep == .welcome || currentStep == .authentication {
             return
         }
         
@@ -197,14 +204,7 @@ struct OnboardingCoordinator: View {
         }
 
         switch currentStep {
-        case .welcome:
-            // Stay on the welcome step until the user taps "Get Started".
-            break
-        case .authentication:
-            // Stay on authentication until user signs in
-            break
         case .wearableSelection:
-            // Stay on wearable selection until user chooses a device
             break
         case .healthKit:
             if isHealthAuthorized {
@@ -214,7 +214,7 @@ struct OnboardingCoordinator: View {
             if !isHealthAuthorized {
                 currentStep = .healthKit
             }
-        case .playlistSelection:
+        default:
             break
         }
     }

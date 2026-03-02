@@ -28,10 +28,16 @@ final class MockMusicService: MusicServiceProtocol {
     var playbackStatePublisher: AnyPublisher<PlaybackState, Never> { playbackStateSubject.eraseToAnyPublisher() }
     var currentTrackPublisher: AnyPublisher<Track?, Never> { currentTrackSubject.eraseToAnyPublisher() }
     var errorPublisher: AnyPublisher<Error?, Never> { errorSubject.eraseToAnyPublisher() }
+    var currentPlaybackTimePublisher: AnyPublisher<TimeInterval, Never> { currentPlaybackTimeSubject.eraseToAnyPublisher() }
+    var trackUpdatedPublisher: AnyPublisher<Track, Never> { trackUpdatedSubject.eraseToAnyPublisher() }
+    var playbackInterruptedPublisher: AnyPublisher<Bool, Never> { playbackInterruptedSubject.eraseToAnyPublisher() }
 
     private let playbackStateSubject = CurrentValueSubject<PlaybackState, Never>(.stopped)
     private let currentTrackSubject = CurrentValueSubject<Track?, Never>(nil)
     private let errorSubject = CurrentValueSubject<Error?, Never>(nil)
+    private let currentPlaybackTimeSubject = CurrentValueSubject<TimeInterval, Never>(0)
+    private let trackUpdatedSubject = PassthroughSubject<Track, Never>()
+    private let playbackInterruptedSubject = CurrentValueSubject<Bool, Never>(false)
 
     var playedTracks: [Track] = []
     var playCallCount = 0
@@ -74,6 +80,10 @@ final class MockMusicService: MusicServiceProtocol {
     func stop() {
         playbackStateSubject.send(.stopped)
         currentTrackSubject.send(nil)
+    }
+
+    func retryPlaybackAfterInterruption() {
+        playbackInterruptedSubject.send(false)
     }
 
     var fetchUserPlaylistsHandler: ((@escaping (Result<[MusicPlaylist], Error>) -> Void) -> Void)?

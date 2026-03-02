@@ -92,8 +92,7 @@ class AnalyzeResponse(BaseModel):
 def analyze_track(
     request: TrackAnalyzeRequest,
     db: Session = Depends(deps.get_db),
-    # TODO: Re-enable auth for production
-    # current_user: User = Depends(deps.get_current_user),
+    current_user: User = Depends(deps.get_current_user),
 ) -> Any:
     """
     Analyze a track's BPM using its preview URL.

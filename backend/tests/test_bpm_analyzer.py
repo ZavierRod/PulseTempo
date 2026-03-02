@@ -109,7 +109,7 @@ def test_analyze_endpoint(mock_analyze, mock_db):
     assert mock_track.confidence == 1.0
     assert mock_track.source == "librosa_analysis"
     
-    # Verify DB commit was called
+    # Verify DB commit was called (update path: track exists, so else branch runs)
+    # Note: db.refresh() is only called in the new-insert path, not the update path
     mock_db.commit.assert_called_once()
-    mock_db.refresh.assert_called_once_with(mock_track)
 

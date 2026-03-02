@@ -215,26 +215,13 @@ struct SearchResultRow: View {
     var body: some View {
         HStack(spacing: 12) {
             // Album artwork
-            if let artworkURL = track.artworkURL {
-                AsyncImage(url: artworkURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 50, height: 50)
-                            .cornerRadius(8)
-                    case .failure(_):
-                        artworkPlaceholder
-                    case .empty:
-                        ProgressView()
-                            .tint(.white)
-                            .frame(width: 50, height: 50)
-                    @unknown default:
-                        artworkPlaceholder
-                    }
-                }
-            } else {
+            CachedAsyncImage(url: track.artworkURL) { image in
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 50, height: 50)
+                    .cornerRadius(8)
+            } placeholder: {
                 artworkPlaceholder
             }
             

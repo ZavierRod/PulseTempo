@@ -16,6 +16,7 @@ protocol MusicServiceProtocol: AnyObject {
 
     var errorPublisher: AnyPublisher<Error?, Never> { get }
     var trackUpdatedPublisher: AnyPublisher<Track, Never> { get }
+    var playbackInterruptedPublisher: AnyPublisher<Bool, Never> { get }
     func play(track: Track, completion: @escaping (Result<Void, Error>) -> Void)
     func playQueue(tracks: [Track], startIndex: Int, completion: @escaping (Result<Void, Error>) -> Void)
     func playNext(track: Track)
@@ -23,6 +24,7 @@ protocol MusicServiceProtocol: AnyObject {
     func pause()
     func resume()
     func stop()
+    func retryPlaybackAfterInterruption()
     func fetchUserPlaylists(completion: @escaping (Result<[MusicPlaylist], Error>) -> Void)
     func fetchTracksFromPlaylist(playlistId: String, triggerBPMAnalysis: Bool, completion: @escaping (Result<[Track], Error>) -> Void)
 }
@@ -66,6 +68,9 @@ class MusicService: ObservableObject, MusicServiceProtocol {
     
     /// Any error that occurred during music operations
     @Published var error: Error?
+
+    /// Set when the XPC connection to the media daemon drops; UI can show a retry prompt
+    @Published var playbackInterrupted: Bool = false
     
     /// List of user's playlists fetched from Apple Music
     @Published var userPlaylists: [MusicPlaylist] = []
@@ -94,6 +99,10 @@ class MusicService: ObservableObject, MusicServiceProtocol {
     
     var trackUpdatedPublisher: AnyPublisher<Track, Never> {
         trackUpdatedSubject.eraseToAnyPublisher()
+    }
+
+    var playbackInterruptedPublisher: AnyPublisher<Bool, Never> {
+        $playbackInterrupted.eraseToAnyPublisher()
     }
     
     // MARK: - Private Properties
@@ -164,8 +173,8 @@ class MusicService: ObservableObject, MusicServiceProtocol {
         let host = "https://pulsetempo-production.up.railway.app"
         
         guard let url = URL(string: "\(host)/api/health") else {
-            // Fallback: try the analyze endpoint with a simple GET (will fail but triggers permission)
-            guard let fallbackUrl = URL(string: "\(host)/api/tracks/analyze") else { return }
+            // Fallback: ping the health check to trigger network permission prompt
+            guard let fallbackUrl = URL(string: "\(host)/api/health") else { return }
             URLSession.shared.dataTask(with: fallbackUrl) { _, _, _ in
                 print("🌐 Local network permission warm-up request sent (fallback)")
             }.resume()
@@ -203,6 +212,36 @@ class MusicService: ObservableObject, MusicServiceProtocol {
         // Don't print every save to avoid log spam - the didSet triggers on every change
     }
     
+    // MARK: - XPC Error Handling
+
+    /// Returns true if the error looks like an XPC / MediaPlayer daemon timeout or disconnect.
+    private func isXPCConnectionError(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        let desc = nsError.localizedDescription + (nsError.userInfo[NSDebugDescriptionErrorKey] as? String ?? "")
+        let patterns = ["Remote call timed out", "ping did not pong",
+                        "connection interrupted", "connection invalidated",
+                        "establishConnection"]
+        return patterns.contains(where: { desc.localizedCaseInsensitiveContains($0) })
+            || nsError.code == 500 && nsError.domain.contains("MusicPlayer")
+    }
+
+    /// Attempt to recover playback after an XPC interruption.
+    /// Re-creates the queue from the current track and resumes.
+    @MainActor
+    func retryPlaybackAfterInterruption() {
+        guard let track = currentTrack else { return }
+        playbackInterrupted = false
+        print("🔄 [XPC] Attempting playback recovery for '\(track.title)'...")
+        play(track: track) { result in
+            switch result {
+            case .success:
+                print("✅ [XPC] Playback recovered successfully")
+            case .failure(let error):
+                print("❌ [XPC] Recovery failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
     // MARK: - Playback Control
     
     /// Play a specific track
@@ -277,6 +316,10 @@ class MusicService: ObservableObject, MusicServiceProtocol {
                 print("❌ Play failed: \(error.localizedDescription)")
                 await MainActor.run {
                     self.error = error
+                    if self.isXPCConnectionError(error) {
+                        print("⚠️ [XPC] Detected connection failure during play")
+                        self.playbackInterrupted = true
+                    }
                     completion(.failure(error))
                 }
             }
@@ -370,11 +413,16 @@ class MusicService: ObservableObject, MusicServiceProtocol {
                 try await player.play()
                 await MainActor.run {
                     self.playbackState = .playing
+                    self.playbackInterrupted = false
                     self.startPlaybackTimer()
                 }
             } catch {
                 await MainActor.run {
                     self.error = error
+                    if self.isXPCConnectionError(error) {
+                        print("⚠️ [XPC] Detected connection failure during resume")
+                        self.playbackInterrupted = true
+                    }
                 }
             }
         }
@@ -407,10 +455,13 @@ class MusicService: ObservableObject, MusicServiceProtocol {
         Task {
             do {
                 try await player.skipToNextEntry()
-                // The playback observer will update currentTrack
             } catch {
                 await MainActor.run {
                     self.error = error
+                    if self.isXPCConnectionError(error) {
+                        print("⚠️ [XPC] Detected connection failure during skipToNext")
+                        self.playbackInterrupted = true
+                    }
                 }
             }
         }
@@ -584,7 +635,12 @@ class MusicService: ObservableObject, MusicServiceProtocol {
             } catch {
                 await MainActor.run {
                     self.error = error
-                    print("❌ Error replacing next track: \(error.localizedDescription)")
+                    if self.isXPCConnectionError(error) {
+                        print("⚠️ [XPC] Detected connection failure during replaceNext")
+                        self.playbackInterrupted = true
+                    } else {
+                        print("❌ Error replacing next track: \(error.localizedDescription)")
+                    }
                 }
             }
         }
@@ -802,6 +858,12 @@ class MusicService: ObservableObject, MusicServiceProtocol {
         let host = "https://pulsetempo-production.up.railway.app"
         guard let url = URL(string: "\(host)/api/tracks/analyze") else { return false }
         
+        // Endpoint is auth-protected — require a valid access token
+        guard let token = KeychainManager.shared.getAccessToken() else {
+            print("⚠️ [BPM] Skipping analysis for '\(track.title)' — user not authenticated")
+            return true  // Non-retryable; don't keep trying without a token
+        }
+        
         if attempt == 1 {
             print("🔍 Analyzing BPM for track \(track.id)...")
         }
@@ -809,6 +871,7 @@ class MusicService: ObservableObject, MusicServiceProtocol {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.timeoutInterval = 30
         
         let body: [String: String] = [
@@ -828,7 +891,11 @@ class MusicService: ObservableObject, MusicServiceProtocol {
                 }
                 if httpResponse.statusCode != 200 {
                     let responseBody = String(data: data, encoding: .utf8) ?? "Unknown"
-                    print("❌ BPM API returned status \(httpResponse.statusCode) for '\(track.title)': \(responseBody)")
+                    if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
+                        print("🔐 [BPM] Auth rejected (\(httpResponse.statusCode)) for '\(track.title)' — skipping")
+                    } else {
+                        print("❌ BPM API returned status \(httpResponse.statusCode) for '\(track.title)': \(responseBody)")
+                    }
                     return true  // Non-retryable error, don't keep trying
                 }
             }
@@ -920,7 +987,7 @@ class MusicService: ObservableObject, MusicServiceProtocol {
         }
         
         var request = MusicCatalogSearchRequest(term: query, types: [Song.self])
-        request.limit = 25
+        request.limit = 15
         
         let response = try await request.response()
         

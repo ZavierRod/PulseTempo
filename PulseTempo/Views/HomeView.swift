@@ -442,6 +442,7 @@ struct WorkoutModeButton: View {
 struct SelectedPlaylistsSheet: View {
     let playlists: [MusicPlaylist]
     var onSongsAdded: (([Track]) -> Void)? = nil
+    var isWorkoutContext: Bool = false
     @Environment(\.dismiss) private var dismiss
     @State private var selectedPlaylistForViewing: MusicPlaylist?
     
@@ -459,27 +460,15 @@ struct SelectedPlaylistsSheet: View {
                         LazyVStack(spacing: 12) {
                             ForEach(playlists) { playlist in
                                 HStack(spacing: 12) {
-                                    if let artwork = playlist.artwork,
-                                       let url = artwork.url(width: 100, height: 100) {
-                                        AsyncImage(url: url) { phase in
-                                            switch phase {
-                                            case .success(let image):
-                                                image
-                                                    .resizable()
-                                                    .aspectRatio(contentMode: .fill)
-                                                    .frame(width: 56, height: 56)
-                                                    .cornerRadius(8)
-                                            case .failure(_):
-                                                placeholderArtwork
-                                            case .empty:
-                                                ProgressView()
-                                                    .tint(.white)
-                                                    .frame(width: 56, height: 56)
-                                            @unknown default:
-                                                placeholderArtwork
-                                            }
-                                        }
-                                    } else {
+                                    CachedAsyncImage(
+                                        url: playlist.artwork?.url(width: 100, height: 100)
+                                    ) { image in
+                                        image
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                            .frame(width: 56, height: 56)
+                                            .cornerRadius(8)
+                                    } placeholder: {
                                         placeholderArtwork
                                     }
                                     
@@ -543,7 +532,8 @@ struct SelectedPlaylistsSheet: View {
                     onDismiss: {
                         selectedPlaylistForViewing = nil
                     },
-                    onSongsAdded: onSongsAdded
+                    onSongsAdded: onSongsAdded,
+                    skipBPMAnalysis: isWorkoutContext
                 )
             }
         }
