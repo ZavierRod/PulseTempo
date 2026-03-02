@@ -7,11 +7,21 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D022C4D22F5637CD008ACFCA /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D022C4D12F5637CD008ACFCA /* WidgetKit.framework */; };
+		D022C4D42F5637CD008ACFCA /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D022C4D32F5637CD008ACFCA /* SwiftUI.framework */; };
+		D022C4E32F5637CF008ACFCA /* PulseTempoWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D022C4D02F5637CD008ACFCA /* PulseTempoWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		D0C492F12EBC5F98006A0DAA /* MusicKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D0C492F02EBC5F98006A0DAA /* MusicKit.framework */; };
 		D0C4DACB2F1EA64F00FA90D8 /* PulseTempo Watch App Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = D0C4DAAB2F1EA64C00FA90D8 /* PulseTempo Watch App Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		D022C4E12F5637CF008ACFCA /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D0C492992EBAD91B006A0DAA /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D022C4CF2F5637CD008ACFCA;
+			remoteInfo = PulseTempoWidgetExtension;
+		};
 		D0C492AF2EBAD91E006A0DAA /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = D0C492992EBAD91B006A0DAA /* Project object */;
@@ -50,6 +60,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		D022C4E42F5637CF008ACFCA /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				D022C4E32F5637CF008ACFCA /* PulseTempoWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		D0C4DACC2F1EA64F00FA90D8 /* Embed Watch Content */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -64,6 +85,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		D022C4D02F5637CD008ACFCA /* PulseTempoWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PulseTempoWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		D022C4D12F5637CD008ACFCA /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		D022C4D32F5637CD008ACFCA /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		D02A11722EE2536F00EDB23C /* PulseTempo.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = PulseTempo.xctestplan; sourceTree = "<group>"; };
 		D0C492A12EBAD91B006A0DAA /* PulseTempo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PulseTempo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D0C492AE2EBAD91E006A0DAA /* PulseTempoTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PulseTempoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -75,6 +99,20 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		D022C4E82F5637CF008ACFCA /* Exceptions for "PulseTempoWidget" folder in "PulseTempoWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = D022C4CF2F5637CD008ACFCA /* PulseTempoWidgetExtension */;
+		};
+		D022C4EC2F563913008ACFCA /* Exceptions for "PulseTempo" folder in "PulseTempoWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Models/PulseTempoWidgetAttributes.swift,
+			);
+			target = D022C4CF2F5637CD008ACFCA /* PulseTempoWidgetExtension */;
+		};
 		D0C492F32EBC6088006A0DAA /* Exceptions for "PulseTempo" folder in "PulseTempo" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -85,10 +123,19 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		D022C4D52F5637CD008ACFCA /* PulseTempoWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				D022C4E82F5637CF008ACFCA /* Exceptions for "PulseTempoWidget" folder in "PulseTempoWidgetExtension" target */,
+			);
+			path = PulseTempoWidget;
+			sourceTree = "<group>";
+		};
 		D0C492A32EBAD91B006A0DAA /* PulseTempo */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				D0C492F32EBC6088006A0DAA /* Exceptions for "PulseTempo" folder in "PulseTempo" target */,
+				D022C4EC2F563913008ACFCA /* Exceptions for "PulseTempo" folder in "PulseTempoWidgetExtension" target */,
 			);
 			path = PulseTempo;
 			sourceTree = "<group>";
@@ -121,6 +168,15 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		D022C4CD2F5637CD008ACFCA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D022C4D42F5637CD008ACFCA /* SwiftUI.framework in Frameworks */,
+				D022C4D22F5637CD008ACFCA /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		D0C4929E2EBAD91B006A0DAA /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -177,6 +233,7 @@
 				D0C4DAAC2F1EA64C00FA90D8 /* PulseTempo Watch App Watch App */,
 				D0C4DABA2F1EA64F00FA90D8 /* PulseTempo Watch App Watch AppTests */,
 				D0C4DAC42F1EA64F00FA90D8 /* PulseTempo Watch App Watch AppUITests */,
+				D022C4D52F5637CD008ACFCA /* PulseTempoWidget */,
 				D0C492EF2EBC5F97006A0DAA /* Frameworks */,
 				D0C492A22EBAD91B006A0DAA /* Products */,
 			);
@@ -191,6 +248,7 @@
 				D0C4DAAB2F1EA64C00FA90D8 /* PulseTempo Watch App Watch App.app */,
 				D0C4DAB72F1EA64E00FA90D8 /* PulseTempo Watch App Watch AppTests.xctest */,
 				D0C4DAC12F1EA64F00FA90D8 /* PulseTempo Watch App Watch AppUITests.xctest */,
+				D022C4D02F5637CD008ACFCA /* PulseTempoWidgetExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -199,6 +257,8 @@
 			isa = PBXGroup;
 			children = (
 				D0C492F02EBC5F98006A0DAA /* MusicKit.framework */,
+				D022C4D12F5637CD008ACFCA /* WidgetKit.framework */,
+				D022C4D32F5637CD008ACFCA /* SwiftUI.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -206,6 +266,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		D022C4CF2F5637CD008ACFCA /* PulseTempoWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D022C4E72F5637CF008ACFCA /* Build configuration list for PBXNativeTarget "PulseTempoWidgetExtension" */;
+			buildPhases = (
+				D022C4CC2F5637CD008ACFCA /* Sources */,
+				D022C4CD2F5637CD008ACFCA /* Frameworks */,
+				D022C4CE2F5637CD008ACFCA /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				D022C4D52F5637CD008ACFCA /* PulseTempoWidget */,
+			);
+			name = PulseTempoWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = PulseTempoWidgetExtension;
+			productReference = D022C4D02F5637CD008ACFCA /* PulseTempoWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		D0C492A02EBAD91B006A0DAA /* PulseTempo */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = D0C492C22EBAD91E006A0DAA /* Build configuration list for PBXNativeTarget "PulseTempo" */;
@@ -214,11 +296,13 @@
 				D0C4929E2EBAD91B006A0DAA /* Frameworks */,
 				D0C4929F2EBAD91B006A0DAA /* Resources */,
 				D0C4DACC2F1EA64F00FA90D8 /* Embed Watch Content */,
+				D022C4E42F5637CF008ACFCA /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				D0C4DACA2F1EA64F00FA90D8 /* PBXTargetDependency */,
+				D022C4E22F5637CF008ACFCA /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				D0C492A32EBAD91B006A0DAA /* PulseTempo */,
@@ -351,9 +435,12 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2600;
+				LastSwiftUpdateCheck = 2630;
 				LastUpgradeCheck = 2600;
 				TargetAttributes = {
+					D022C4CF2F5637CD008ACFCA = {
+						CreatedOnToolsVersion = 26.3;
+					};
 					D0C492A02EBAD91B006A0DAA = {
 						CreatedOnToolsVersion = 26.0.1;
 					};
@@ -398,11 +485,19 @@
 				D0C4DAAA2F1EA64C00FA90D8 /* PulseTempo Watch App Watch App */,
 				D0C4DAB62F1EA64E00FA90D8 /* PulseTempo Watch App Watch AppTests */,
 				D0C4DAC02F1EA64F00FA90D8 /* PulseTempo Watch App Watch AppUITests */,
+				D022C4CF2F5637CD008ACFCA /* PulseTempoWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		D022C4CE2F5637CD008ACFCA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		D0C4929F2EBAD91B006A0DAA /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -448,6 +543,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		D022C4CC2F5637CD008ACFCA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		D0C4929D2EBAD91B006A0DAA /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -493,6 +595,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		D022C4E22F5637CF008ACFCA /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D022C4CF2F5637CD008ACFCA /* PulseTempoWidgetExtension */;
+			targetProxy = D022C4E12F5637CF008ACFCA /* PBXContainerItemProxy */;
+		};
 		D0C492B02EBAD91E006A0DAA /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = D0C492A02EBAD91B006A0DAA /* PulseTempo */;
@@ -521,6 +628,68 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		D022C4E52F5637CF008ACFCA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = SKSR747K3X;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = PulseTempoWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = PulseTempoWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.zavier.PulseTempo.PulseTempoWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		D022C4E62F5637CF008ACFCA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = SKSR747K3X;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = PulseTempoWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = PulseTempoWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.zavier.PulseTempo.PulseTempoWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		D0C492C02EBAD91E006A0DAA /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -965,6 +1134,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		D022C4E72F5637CF008ACFCA /* Build configuration list for PBXNativeTarget "PulseTempoWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D022C4E52F5637CF008ACFCA /* Debug */,
+				D022C4E62F5637CF008ACFCA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		D0C4929C2EBAD91B006A0DAA /* Build configuration list for PBXProject "PulseTempo" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

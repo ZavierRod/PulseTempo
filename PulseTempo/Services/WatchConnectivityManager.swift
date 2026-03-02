@@ -252,6 +252,15 @@ extension WatchConnectivityManager: WCSessionDelegate {
         DispatchQueue.main.async {
             self.isWatchReachable = session.isReachable
             self.connectionStatus = session.isReachable ? "Connected" : "Watch not reachable"
+
+            // When the watch goes unreachable, clear workout-active state.
+            // Without this, a stale isWatchWorkoutActive=true from a session that
+            // disconnected before sending its final discard message persists indefinitely
+            // and can bypass the confirmation flow the next time the user taps Start.
+            if !session.isReachable {
+                self.isWatchWorkoutActive = false
+                self.isWaitingForWatch = false
+            }
         }
         print("📱 [iOS] Watch reachability changed: \(session.isReachable)")
     }
@@ -424,16 +433,29 @@ extension WatchConnectivityManager: WCSessionDelegate {
         print("🧹 [iOS] Cleared pending workout request")
     }
     
-    /// Clear received applicationContext
+    /// Clear the pending workout request from applicationContext.
+    /// The phone updates its own applicationContext; the watch reads this as
+    /// session.receivedApplicationContext, so clearing here prevents the watch
+    /// from seeing a stale `pendingWorkoutRequest: true` on its next launch.
     private func clearReceivedWorkoutRequest() {
-        // We can't directly clear receivedApplicationContext, but we can
-        // send a confirmation back to watch which will clear their context
-        // For now, just log it
-        print("🧹 [iOS] Acknowledged workout request from context")
+        guard let session = session, session.activationState == .activated else { return }
+        do {
+            try session.updateApplicationContext([:])
+            print("🧹 [iOS] Cleared workout request from applicationContext")
+        } catch {
+            print("❌ [iOS] Failed to clear applicationContext: \(error.localizedDescription)")
+        }
     }
     
     /// Send confirmation to watch that workout has started
     func sendWorkoutStartedConfirmation() {
+        // Clear the pending workout request from applicationContext so the watch
+        // doesn't treat it as a fresh request on next launch (stale context bug).
+        if let session = session, session.activationState == .activated {
+            try? session.updateApplicationContext([:])
+            print("🧹 [iOS] Cleared workout request from applicationContext after start")
+        }
+
         guard let session = session, session.isReachable else {
             print("⚠️ [iOS] Watch not reachable, cannot send confirmation")
             return

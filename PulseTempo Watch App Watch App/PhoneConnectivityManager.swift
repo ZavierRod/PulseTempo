@@ -334,13 +334,26 @@ extension PhoneConnectivityManager: WCSessionDelegate {
         
         let context = session.receivedApplicationContext
         
-        if let pendingRequest = context["pendingWorkoutRequest"] as? Bool,
-           pendingRequest,
-           let source = context["source"] as? String,
-           source == "phone" {
-            return true
+        guard let pendingRequest = context["pendingWorkoutRequest"] as? Bool,
+              pendingRequest,
+              let source = context["source"] as? String,
+              source == "phone" else {
+            return false
         }
-        return false
+
+        // Reject stale requests older than 60 seconds.
+        // applicationContext persists across sessions; without this check a leftover
+        // request from a prior workout causes the watch to start immediately with no
+        // phone confirmation on the very next launch.
+        if let ts = context["requestTimestamp"] as? TimeInterval {
+            let age = Date().timeIntervalSince1970 - ts
+            if age > 60 {
+                print("⚠️ [Watch] Ignoring stale phone workout request (\(Int(age))s old)")
+                return false
+            }
+        }
+
+        return true
     }
     
     /// Check applicationContext for pending workout request from phone (on app launch)
@@ -349,13 +362,24 @@ extension PhoneConnectivityManager: WCSessionDelegate {
         
         let context = session.receivedApplicationContext
         
-        if let pendingRequest = context["pendingWorkoutRequest"] as? Bool,
-           pendingRequest,
-           let source = context["source"] as? String,
-           source == "phone" {
-            print("📲 [Watch] Found pending workout request from phone in applicationContext")
-            handleWorkoutRequestFromPhone()
+        guard let pendingRequest = context["pendingWorkoutRequest"] as? Bool,
+              pendingRequest,
+              let source = context["source"] as? String,
+              source == "phone" else {
+            return
         }
+
+        // Reject stale requests (same 60-second window as hasPendingPhoneWorkoutRequest)
+        if let ts = context["requestTimestamp"] as? TimeInterval {
+            let age = Date().timeIntervalSince1970 - ts
+            if age > 60 {
+                print("⚠️ [Watch] Ignoring stale pending request on launch (\(Int(age))s old)")
+                return
+            }
+        }
+
+        print("📲 [Watch] Found pending workout request from phone in applicationContext")
+        handleWorkoutRequestFromPhone()
     }
     
     /// Handle commands from iPhone

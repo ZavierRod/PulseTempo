@@ -335,21 +335,14 @@ struct HomeView: View {
                     return
                 }
                 
-                // Phone-first flow: Send workout request to watch and wait for confirmation
+                // Phone-first flow: Send workout request to watch and wait for confirmation.
+                // onWatchWorkoutStarted fires when the watch replies with isActive=true.
                 connectivityManager.requestWorkoutFromPhone()
-                
-                // Set up callback for when watch confirms - only then navigate to ActiveRunView
                 connectivityManager.onWatchWorkoutStarted = {
                     connectivityManager.isWaitingForWatch = false
                     showingActiveRun = true
                 }
-                
-                // If watch workout is already active, start immediately (no need to wait)
-                if connectivityManager.isWatchWorkoutActive {
-                    connectivityManager.isWaitingForWatch = false
-                    showingActiveRun = true
-                }
-                // Otherwise, isWaitingForWatch will show the overlay until watch confirms
+                // isWaitingForWatch overlay stays up until the watch confirms.
                 
             case .failure(let error):
                 trackLoadError = error.localizedDescription

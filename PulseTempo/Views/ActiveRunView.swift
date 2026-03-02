@@ -25,6 +25,9 @@ struct ActiveRunView: View {
     @State private var controlsSheetDetent: PresentationDetent = .large
     @State private var pendingSheet: PendingSheet?
 
+    /// Locally-cached artwork colors — updated with animation whenever the track changes
+    @State private var artworkColors: ArtworkColors?
+
     private let selectedPlaylists: [MusicPlaylist]
 
     private enum PendingSheet {
@@ -134,6 +137,12 @@ struct ActiveRunView: View {
         }
         .onAppear {
             runSessionVM.startRun()
+            artworkColors = runSessionVM.artworkColors
+        }
+        .onChange(of: runSessionVM.artworkColors) { _, newColors in
+            withAnimation(.easeInOut(duration: 0.8)) {
+                artworkColors = newColors
+            }
         }
         .onChange(of: runSessionVM.shouldDismissEntireView) { _, shouldDismiss in
             if shouldDismiss {
@@ -411,10 +420,12 @@ struct ActiveRunView: View {
     
     private var backgroundGradient: some View {
         let zone = HeartRateZone.zone(for: runSessionVM.currentHeartRate)
+        // Use album artwork color when available, otherwise fall back to HR zone color
+        let baseColor: Color = artworkColors?.background ?? zone.color
         return LinearGradient(
             gradient: Gradient(colors: [
-                zone.color.opacity(0.8),
-                zone.color.opacity(0.4),
+                baseColor.opacity(0.85),
+                baseColor.opacity(0.35),
                 Color.black
             ]),
             startPoint: .top,

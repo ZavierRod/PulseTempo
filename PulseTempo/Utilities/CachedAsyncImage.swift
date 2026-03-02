@@ -47,13 +47,23 @@ struct CachedAsyncImage<Content: View, Placeholder: View>: View {
     }
 
     var body: some View {
-        if let image = loadedImage {
-            content(Image(uiImage: image))
-        } else if loadFailed {
-            placeholder()
-        } else {
-            placeholder()
-                .onAppear { loadImage() }
+        Group {
+            if let image = loadedImage {
+                content(Image(uiImage: image))
+            } else if loadFailed {
+                placeholder()
+            } else {
+                placeholder()
+                    .onAppear { loadImage() }
+            }
+        }
+        // Re-fetch whenever the URL changes (e.g. track skipped in ActiveRunView).
+        // Without this, SwiftUI reuses the existing view and onAppear never fires again,
+        // leaving the previous track's artwork on screen.
+        .onChange(of: url) { _, newURL in
+            loadedImage = nil
+            loadFailed = false
+            if newURL != nil { loadImage() }
         }
     }
 

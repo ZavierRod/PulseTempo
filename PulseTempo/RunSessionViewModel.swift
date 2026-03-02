@@ -75,6 +75,10 @@ final class RunSessionViewModel: ObservableObject {
     // ERROR HANDLING
     @Published var errorMessage: String?         // User-friendly error message
     @Published var playbackInterrupted: Bool = false  // XPC connection lost
+
+    /// Dynamic color palette extracted from the current track's album artwork.
+    /// Nil when no track is playing or the artwork has no color metadata.
+    @Published var artworkColors: ArtworkColors?
     
     // WATCH CONNECTIVITY
     private let watchConnectivityManager = WatchConnectivityManager.shared
@@ -96,6 +100,7 @@ final class RunSessionViewModel: ObservableObject {
     // These are the core services that power the app
     private let heartRateService: HeartRateServiceProtocol  // Monitors heart rate
     private let musicService: MusicServiceProtocol          // Controls music playback
+    private let liveActivityManager = LiveActivityManager.shared // Controls Dynamic Island UI
     
     // TRACK MANAGEMENT
     private var tracks: [Track] = []             // All available tracks
@@ -279,7 +284,17 @@ final class RunSessionViewModel: ObservableObject {
                 self?.handleTrackUpdate(updatedTrack)
             }
             .store(in: &cancellables)
-        
+
+        // OBSERVE ARTWORK COLORS FOR DYNAMIC BACKGROUND THEMING
+        // Subscribe directly to MusicService.shared so we can access the @Published property
+        // (MusicServiceProtocol doesn't expose artworkColors to keep the protocol lightweight)
+        MusicService.shared.$artworkColors
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] colors in
+                self?.artworkColors = colors
+            }
+            .store(in: &cancellables)
+
         // OBSERVE WATCH WORKOUT STATE CHANGES
         setupWatchObservers()
     }
@@ -496,6 +511,18 @@ final class RunSessionViewModel: ObservableObject {
         runTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.updateElapsedTime()
         }
+        
+        // Start Live Activity
+        liveActivityManager.startActivity(
+            workoutType: runMode.displayName,
+            heartRate: Double(currentHeartRate),
+            elapsedTime: 0,
+            queuedSongTitle: queuedNextTrack?.title ?? "Calculating...",
+            queuedArtistName: queuedNextTrack?.artist ?? "matching heart rate",
+            queuedSongBPM: queuedNextTrack?.bpm,
+            artworkData: nil,
+            runModeIcon: runMode == .cadenceMatching ? "figure.run" : "heart.fill"
+        )
     }
 
     /// Attempt to recover music playback after an XPC interruption
@@ -611,6 +638,9 @@ final class RunSessionViewModel: ObservableObject {
             watchConnectivityManager.sendFinishWorkoutCommand()
         }
         
+        // End Live Activity
+        liveActivityManager.endActivity()
+        
         print("🏁 [iOS] Workout finished - showing summary")
     }
     
@@ -663,6 +693,9 @@ final class RunSessionViewModel: ObservableObject {
         if sendToWatch {
             watchConnectivityManager.sendDiscardWorkoutCommand()
         }
+        
+        // End Live Activity
+        liveActivityManager.endActivity()
         
         print("🗑 [iOS] Workout discarded")
     }
@@ -888,6 +921,11 @@ final class RunSessionViewModel: ObservableObject {
         // If not, this queues the first track
         musicService.replaceNext(track: bestMatchTrack)
         
+        // Push the new queued track to the Live Activity
+        if sessionState == .active {
+            updateLiveActivity()
+        }
+        
         // Record the time of this update for throttling
         lastQueueUpdateTime = Date()
         
@@ -1029,6 +1067,11 @@ final class RunSessionViewModel: ObservableObject {
         // Replace the queued track
         musicService.replaceNext(track: bestMatchTrack)
         
+        // Push the new queued track to the Live Activity
+        if sessionState == .active {
+            updateLiveActivity()
+        }
+        
         // Record the time of this update for throttling
         lastQueueUpdateTime = Date()
         
@@ -1108,6 +1151,11 @@ final class RunSessionViewModel: ObservableObject {
     private func updateElapsedTime() {
         guard let startTime = runStartTime else { return }
         elapsedTime = Date().timeIntervalSince(startTime)
+        
+        // Update Live Activity once per second with new elapsed time
+        if sessionState == .active {
+            updateLiveActivity()
+        }
     }
     
     /// Calculate final metrics when run completes
@@ -1220,6 +1268,19 @@ private extension RunSessionViewModel {
             self.tracksPlayed = history
             self.currentTrack = track
         }
+    }
+    
+    /// Helper to update the live activity with the latest time and heart rate
+    private func updateLiveActivity() {
+        liveActivityManager.updateActivity(
+            heartRate: Double(currentHeartRate),
+            elapsedTime: elapsedTime,
+            queuedSongTitle: queuedNextTrack?.title ?? "Calculating...",
+            queuedArtistName: queuedNextTrack?.artist ?? "matching heart rate",
+            queuedSongBPM: queuedNextTrack?.bpm,
+            artworkData: nil, // We don't fetch artwork on every tick for efficiency
+            runModeIcon: runMode == .cadenceMatching ? "figure.run" : "heart.fill"
+        )
     }
     
     // MARK: - Test Helpers

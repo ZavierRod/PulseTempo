@@ -233,26 +233,27 @@ class WorkoutManager: NSObject, ObservableObject {
     
     // MARK: - Workout Control
     
-    /// Request workout start - enters waiting state if phone not reachable
+    /// Request workout start - always enters waiting state first so user must confirm.
     func requestWorkoutStart() {
-        // Check if phone already requested workout (phone-first flow)
+        // If the phone previously requested a workout (via applicationContext),
+        // show the confirmation screen rather than auto-starting.
+        // Auto-starting here was the bug: a stale context from any prior session
+        // would cause the watch to immediately start without any phone confirmation.
         if phoneConnectivityManager?.hasPendingPhoneWorkoutRequest() == true {
-            print("✅ [Watch] Phone already requested - starting immediately")
-            startWorkout(triggeredRemotely: true)
+            print("📲 [Watch] Phone has a pending request - showing confirmation screen")
+            syncState = .pendingPhoneRequest
             return
         }
-        
-        // Watch-first flow: Check if phone is reachable
+
+        // Watch-first flow: send request to phone and wait for its confirmation.
+        // The watch ALWAYS waits, regardless of whether the phone is reachable right now.
+        syncState = .waitingForPhone
         if phoneConnectivityManager?.isPhoneReachable == true {
-            // Phone is reachable - send request and wait for confirmation
-            syncState = .waitingForPhone
             phoneConnectivityManager?.sendWorkoutRequest()
-            print("⏳ [Watch] Waiting for phone to start workout...")
+            print("⏳ [Watch] Sent request to phone, waiting for confirmation...")
         } else {
-            // Phone not reachable - show waiting state with instruction
-            syncState = .waitingForPhone
             phoneConnectivityManager?.sendWorkoutRequestWithContext()
-            print("⏳ [Watch] Phone not reachable, sent context. Waiting...")
+            print("⏳ [Watch] Phone not reachable, sent via context. Waiting...")
         }
     }
     

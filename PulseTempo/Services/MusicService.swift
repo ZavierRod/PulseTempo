@@ -8,6 +8,8 @@
 import Foundation
 import MusicKit
 import Combine
+import UIKit
+import SwiftUI
 
 protocol MusicServiceProtocol: AnyObject {
     var playbackStatePublisher: AnyPublisher<PlaybackState, Never> { get }
@@ -27,6 +29,27 @@ protocol MusicServiceProtocol: AnyObject {
     func retryPlaybackAfterInterruption()
     func fetchUserPlaylists(completion: @escaping (Result<[MusicPlaylist], Error>) -> Void)
     func fetchTracksFromPlaylist(playlistId: String, triggerBPMAnalysis: Bool, completion: @escaping (Result<[Track], Error>) -> Void)
+}
+
+// MARK: - Artwork Color Palette
+
+/// Color palette extracted from the current track's album artwork.
+/// Used by `ActiveRunView` to dynamically theme the background gradient.
+struct ArtworkColors: Equatable {
+    /// The dominant background color from the album art
+    let background: Color
+    /// The primary text color suggested for use on top of `background`
+    let primaryText: Color
+    /// The secondary text color suggested for use on top of `background`
+    let secondaryText: Color
+
+    /// Returns nil if the artwork provides no background color metadata
+    init?(artwork: MusicKit.Artwork) {
+        guard let bg = artwork.backgroundColor else { return nil }
+        self.background = Color(bg)
+        self.primaryText = artwork.primaryTextColor.map { Color($0) } ?? .white
+        self.secondaryText = artwork.secondaryTextColor.map { Color($0) } ?? Color.white.opacity(0.7)
+    }
 }
 
 /// Service for controlling Apple Music playback and managing the music queue
@@ -77,6 +100,10 @@ class MusicService: ObservableObject, MusicServiceProtocol {
     
     /// Whether we're currently loading data
     @Published var isLoading: Bool = false
+
+    /// Color palette extracted from the current track's album artwork.
+    /// Nil when no track is playing or the artwork provides no color metadata.
+    @Published var artworkColors: ArtworkColors?
     
     /// Subject for broadcasting track updates (e.g. BPM analysis results)
     private let trackUpdatedSubject = PassthroughSubject<Track, Never>()
@@ -438,6 +465,7 @@ class MusicService: ObservableObject, MusicServiceProtocol {
             await MainActor.run {
                 self.playbackState = .stopped
                 self.currentTrack = nil
+                self.artworkColors = nil
                 self.currentCatalogSong = nil    // Clear cached song
                 self.playbackStartTime = nil     // Clear playback timing
                 self.lastLoggedSongId = nil      // Reset for next session
@@ -756,7 +784,7 @@ class MusicService: ObservableObject, MusicServiceProtocol {
                         print("📦 Using cached BPM for '\(track.attributes.name)': \(cachedBPM!)")
                     }
                     // Extract artwork URL from track attributes
-                    let artworkURL = track.attributes.artwork?.url(width: 120, height: 120)
+                    let artworkURL = track.attributes.artwork?.url(width: 600, height: 600)
                     
                     return Track(
                         id: track.id,
@@ -993,7 +1021,7 @@ class MusicService: ObservableObject, MusicServiceProtocol {
         
         var previewURLs: [String: String] = [:]
         let tracks = response.songs.map { song -> Track in
-            let artworkURL = song.artwork?.url(width: 120, height: 120)
+            let artworkURL = song.artwork?.url(width: 600, height: 600)
             
             // Extract preview URL for BPM analysis
             if let previewURL = song.previewAssets?.first?.url {
@@ -1180,7 +1208,7 @@ class MusicService: ObservableObject, MusicServiceProtocol {
                 playbackStartTime = Date()
                 
                 // Get artwork from current song
-                let artworkURL = song.artwork?.url(width: 300, height: 300)
+                let artworkURL = song.artwork?.url(width: 600, height: 600)
                 
                 // Try to find matching track in our queue
                 // First try by ID, then fallback to title + artist match
@@ -1228,6 +1256,9 @@ class MusicService: ObservableObject, MusicServiceProtocol {
                     )
                 }
                 
+                // Extract and publish artwork color palette for dynamic theming
+                artworkColors = song.artwork.flatMap { ArtworkColors(artwork: $0) }
+
                 // Log the new song
                 let duration = song.duration.map { Int($0) } ?? 0
                 let minutes = duration / 60
