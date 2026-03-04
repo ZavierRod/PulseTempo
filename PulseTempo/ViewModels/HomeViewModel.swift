@@ -158,6 +158,14 @@ final class HomeViewModel: ObservableObject {
         refreshPlaylists()
     }
     
+    /// Remove one playlist from persisted selection.
+    func removeSelectedPlaylist(_ playlistId: String) {
+        var savedIds = storageManager.loadSelectedPlaylists()
+        savedIds.removeAll { $0 == playlistId }
+        storageManager.saveSelectedPlaylists(savedIds)
+        refreshPlaylists()
+    }
+    
     /// Fetch all tracks from selected playlists for workout
     func fetchTracksForWorkout(completion: @escaping (Result<[Track], Error>) -> Void) {
         let savedPlaylistIds = storageManager.loadSelectedPlaylists()

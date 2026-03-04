@@ -181,6 +181,9 @@ class MusicService: ObservableObject, MusicServiceProtocol {
     /// Timer for updating playback time
     private var playbackTimer: Timer?
     
+    /// Cached storefront ID for catalog requests (for example, "us")
+    private var storefrontID: String?
+    
     // MARK: - Initialization
     
     init(musicKitManager: MusicKitManager = .shared, player: ApplicationMusicPlayer = .shared) {
@@ -706,26 +709,18 @@ class MusicService: ObservableObject, MusicServiceProtocol {
             }
             
             do {
-                // Request user's library playlists using Apple Music API
-                let url = URL(string: "https://api.music.apple.com/v1/me/library/playlists?limit=100")!
-                var request = MusicDataRequest(urlRequest: URLRequest(url: url))
-                let response = try await request.response()
-                
-                // Decode the response
-                let decoder = JSONDecoder()
-                let playlistsResponse = try decoder.decode(LibraryPlaylistsResponse.self, from: response.data)
-                
-                // Convert to our MusicPlaylist model
-                // Note: Track count is not available from the list API, would require individual fetches
-                // which causes rate limiting. We'll show playlists without track counts for now.
-                let playlistModels = playlistsResponse.data.map { playlist in
-                    MusicPlaylist(
-                        id: playlist.id,
-                        name: playlist.attributes.name,
-                        trackCount: 0,  // Track count not available from list endpoint
-                        artwork: playlist.attributes.artwork
-                    )
+                let libraryPlaylists = try await fetchLibraryPlaylists()
+                let personalizedPlaylists: [MusicPlaylist]
+                do {
+                    personalizedPlaylists = try await fetchPersonalizedPlaylists()
+                } catch {
+                    personalizedPlaylists = []
+                    print("ℹ️ Personalized recommendation shelves unavailable: \(error.localizedDescription)")
                 }
+                let playlistModels = mergeLibraryAndPersonalizedPlaylists(
+                    libraryPlaylists: libraryPlaylists,
+                    personalizedPlaylists: personalizedPlaylists
+                )
                 
                 await MainActor.run {
                     self.userPlaylists = playlistModels
@@ -740,6 +735,274 @@ class MusicService: ObservableObject, MusicServiceProtocol {
                 }
                 completion(.failure(error))
             }
+        }
+    }
+    
+    /// Fetches playlists from the user's Apple Music library.
+    private func fetchLibraryPlaylists() async throws -> [MusicPlaylist] {
+        let url = URL(string: "https://api.music.apple.com/v1/me/library/playlists?limit=100")!
+        let request = MusicDataRequest(urlRequest: URLRequest(url: url))
+        let response = try await request.response()
+        
+        let decoder = JSONDecoder()
+        let playlistsResponse = try decoder.decode(LibraryPlaylistsResponse.self, from: response.data)
+        
+        return playlistsResponse.data.map { playlist in
+            MusicPlaylist(
+                id: playlist.id,
+                name: playlist.attributes.name,
+                trackCount: 0,
+                artwork: playlist.attributes.artwork,
+                source: .library,
+                sourceSection: "Your Playlists"
+            )
+        }
+    }
+    
+    /// Fetches personalized recommendations and maps them into app playlist cards.
+    private func fetchPersonalizedPlaylists() async throws -> [MusicPlaylist] {
+        let url = URL(string: "https://api.music.apple.com/v1/me/recommendations?types=playlists&limit=30")!
+        let request = MusicDataRequest(urlRequest: URLRequest(url: url))
+        let response = try await request.response()
+        
+        var topPicks: [MusicPlaylist] = []
+        var madeForYou: [MusicPlaylist] = []
+        var dynamicSections: [String: [MusicPlaylist]] = [:]
+        var orderedDynamicSectionTitles: [String] = []
+        var seen = Set<String>()
+        
+        guard
+            let payload = try JSONSerialization.jsonObject(with: response.data) as? [String: Any],
+            let recommendations = payload["data"] as? [[String: Any]]
+        else {
+            return []
+        }
+        
+        for recommendation in recommendations {
+            let title = ((recommendation["attributes"] as? [String: Any])?["title"] as? String) ?? ""
+            let normalizedSectionTitle = normalizedRecommendationSectionTitle(from: title)
+            let items =
+                (((recommendation["relationships"] as? [String: Any])?["contents"] as? [String: Any])?["data"] as? [[String: Any]])
+                ?? []
+            
+            for item in items {
+                guard
+                    let id = item["id"] as? String,
+                    let type = item["type"] as? String
+                else {
+                    continue
+                }
+                
+                guard type == "playlists" else { continue }
+                
+                let attributes = item["attributes"] as? [String: Any]
+                let name =
+                    (attributes?["name"] as? String)
+                    ?? (attributes?["title"] as? String)
+                    ?? ""
+                guard !name.isEmpty else { continue }
+                
+                let source: MusicPlaylistSource = .catalogPlaylist
+                let sectionTitle = normalizedSectionTitle
+                let key = "\(source.rawValue):\(id)"
+                guard !seen.contains(key) else { continue }
+                seen.insert(key)
+                
+                let playlist = MusicPlaylist(
+                    id: id,
+                    name: name,
+                    trackCount: intValue(from: attributes?["trackCount"]),
+                    artwork: decodeArtwork(from: attributes?["artwork"]),
+                    source: source,
+                    sourceSection: sectionTitle
+                )
+                
+                switch sectionTitle {
+                case "Top Picks For You":
+                    topPicks.append(playlist)
+                case "Made For You":
+                    madeForYou.append(playlist)
+                default:
+                    if dynamicSections[sectionTitle] == nil {
+                        orderedDynamicSectionTitles.append(sectionTitle)
+                    }
+                    dynamicSections[sectionTitle, default: []].append(playlist)
+                }
+            }
+        }
+        
+        let fallbackCatalogPlaylists =
+            orderedDynamicSectionTitles
+            .flatMap { dynamicSections[$0] ?? [] }
+            .filter { $0.source == .catalogPlaylist }
+        
+        if topPicks.isEmpty, !fallbackCatalogPlaylists.isEmpty {
+            topPicks = Array(fallbackCatalogPlaylists.prefix(12)).map {
+                MusicPlaylist(
+                    id: $0.id,
+                    name: $0.name,
+                    trackCount: $0.trackCount,
+                    artwork: $0.artwork,
+                    source: $0.source,
+                    sourceSection: "Top Picks For You"
+                )
+            }
+        }
+        
+        if madeForYou.isEmpty, fallbackCatalogPlaylists.count > topPicks.count {
+            madeForYou = Array(fallbackCatalogPlaylists.dropFirst(topPicks.count).prefix(12)).map {
+                MusicPlaylist(
+                    id: $0.id,
+                    name: $0.name,
+                    trackCount: $0.trackCount,
+                    artwork: $0.artwork,
+                    source: $0.source,
+                    sourceSection: "Made For You"
+                )
+            }
+        }
+        
+        var merged = topPicks + madeForYou
+        for title in orderedDynamicSectionTitles {
+            merged.append(contentsOf: dynamicSections[title] ?? [])
+        }
+        
+        return merged
+    }
+    
+    /// Maps recommendation titles into known shelf names while preserving Apple-style dynamic sections.
+    private func normalizedRecommendationSectionTitle(from title: String) -> String {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lower = trimmed.lowercased()
+        
+        if lower.contains("made for you") || lower.contains("just for you") {
+            return "Made For You"
+        }
+        if lower.contains("top picks") || lower.contains("for you") {
+            return "Top Picks For You"
+        }
+        
+        return trimmed.isEmpty ? "Top Picks For You" : trimmed
+    }
+    
+    /// Parses artwork payloads without failing recommendation parsing for malformed items.
+    private func decodeArtwork(from value: Any?) -> Artwork? {
+        guard let value else { return nil }
+        guard JSONSerialization.isValidJSONObject(value) else { return nil }
+        guard let data = try? JSONSerialization.data(withJSONObject: value) else { return nil }
+        return try? JSONDecoder().decode(Artwork.self, from: data)
+    }
+    
+    /// Converts mixed JSON values into integer counts.
+    private func intValue(from value: Any?) -> Int {
+        switch value {
+        case let int as Int:
+            return int
+        case let number as NSNumber:
+            return number.intValue
+        case let string as String:
+            return Int(string) ?? 0
+        default:
+            return 0
+        }
+    }
+    
+    /// Merges personalized recommendations and user's own library playlists.
+    private func mergeLibraryAndPersonalizedPlaylists(
+        libraryPlaylists: [MusicPlaylist],
+        personalizedPlaylists: [MusicPlaylist]
+    ) -> [MusicPlaylist] {
+        var merged: [MusicPlaylist] = []
+        var seen = Set<String>()
+        
+        func appendUnique(_ playlist: MusicPlaylist) {
+            let key = "\(playlist.source.rawValue):\(playlist.id)"
+            guard !seen.contains(key) else { return }
+            seen.insert(key)
+            merged.append(playlist)
+        }
+        
+        let sectionOrder = ["Top Picks For You", "Made For You"]
+        for sectionTitle in sectionOrder {
+            personalizedPlaylists
+                .filter { $0.sourceSection == sectionTitle }
+                .forEach(appendUnique)
+        }
+        
+        let knownSections = Set(sectionOrder)
+        personalizedPlaylists
+            .filter { playlist in
+                guard let section = playlist.sourceSection else { return false }
+                return !knownSections.contains(section)
+            }
+            .forEach(appendUnique)
+        
+        libraryPlaylists.forEach(appendUnique)
+        return merged
+    }
+    
+    /// Resolves which source a playlist ID belongs to.
+    private func playlistSource(for playlistId: String) -> MusicPlaylistSource {
+        userPlaylists.first(where: { $0.id == playlistId })?.source ?? .library
+    }
+    
+    /// Builds the correct Apple Music API URL for tracks based on playlist source.
+    private func playlistTracksURL(playlistId: String, source: MusicPlaylistSource) async throws -> URL {
+        switch source {
+        case .library:
+            return URL(string: "https://api.music.apple.com/v1/me/library/playlists/\(playlistId)/tracks?include=catalog")!
+        case .catalogPlaylist:
+            let storefront = try await fetchStorefrontID()
+            return URL(string: "https://api.music.apple.com/v1/catalog/\(storefront)/playlists/\(playlistId)/tracks")!
+        case .station:
+            throw MusicKitError.custom("Stations can be browsed, but only playlists can be added to workouts right now.")
+        }
+    }
+    
+    /// Fetches and caches the user's storefront for catalog requests.
+    private func fetchStorefrontID() async throws -> String {
+        if let storefrontID {
+            return storefrontID
+        }
+        
+        let url = URL(string: "https://api.music.apple.com/v1/me/storefront")!
+        let request = MusicDataRequest(urlRequest: URLRequest(url: url))
+        let response = try await request.response()
+        let decoder = JSONDecoder()
+        let storefrontResponse = try decoder.decode(MeStorefrontResponse.self, from: response.data)
+        
+        guard let firstStorefront = storefrontResponse.data.first?.id else {
+            throw MusicKitError.custom("Could not determine your Apple Music storefront.")
+        }
+        
+        storefrontID = firstStorefront
+        return firstStorefront
+    }
+    
+    /// Fetch and decode playlist tracks from an Apple Music API endpoint.
+    private func fetchPlaylistTracksResponse(from url: URL) async throws -> LibraryTracksResponse {
+        let request = MusicDataRequest(urlRequest: URLRequest(url: url))
+        let response = try await request.response()
+        let decoder = JSONDecoder()
+        return try decoder.decode(LibraryTracksResponse.self, from: response.data)
+    }
+    
+    /// Resolve playlist tracks response with fallback from library to catalog.
+    /// This keeps saved recommended playlists working even if source metadata is missing.
+    private func requestPlaylistTracksResponse(
+        playlistId: String,
+        source: MusicPlaylistSource
+    ) async throws -> LibraryTracksResponse {
+        let primaryURL = try await playlistTracksURL(playlistId: playlistId, source: source)
+        
+        do {
+            return try await fetchPlaylistTracksResponse(from: primaryURL)
+        } catch {
+            guard source == .library else { throw error }
+            
+            // Saved "For You" playlists can be reloaded without source metadata.
+            let fallbackURL = try await playlistTracksURL(playlistId: playlistId, source: .catalogPlaylist)
+            return try await fetchPlaylistTracksResponse(from: fallbackURL)
         }
     }
     
@@ -761,15 +1024,11 @@ class MusicService: ObservableObject, MusicServiceProtocol {
         
         Task {
             do {
-                // Request tracks from the specific library playlist
-                // Include catalog relationship to get preview URLs
-                let url = URL(string: "https://api.music.apple.com/v1/me/library/playlists/\(playlistId)/tracks?include=catalog")!
-                var request = MusicDataRequest(urlRequest: URLRequest(url: url))
-                let response = try await request.response()
-                
-                // Decode the response
-                let decoder = JSONDecoder()
-                let tracksResponse = try decoder.decode(LibraryTracksResponse.self, from: response.data)
+                let source = self.playlistSource(for: playlistId)
+                let tracksResponse = try await self.requestPlaylistTracksResponse(
+                    playlistId: playlistId,
+                    source: source
+                )
                 
                 // Convert to our Track model
                 // Use cached BPM if available, otherwise nil (will be populated by backend analysis)
@@ -777,7 +1036,7 @@ class MusicService: ObservableObject, MusicServiceProtocol {
                     // Try to find cached BPM by ID first, then by title+artist
                     var cachedBPM = self.bpmCache[track.id]
                     if cachedBPM == nil {
-                        let titleArtistKey = "\(track.attributes.name.lowercased())|\(track.attributes.artistName.lowercased())"
+                        let titleArtistKey = "\(track.attributes.name.lowercased())|\((track.attributes.artistName ?? "Unknown Artist").lowercased())"
                         cachedBPM = self.bpmCache[titleArtistKey]
                     }
                     if cachedBPM != nil {
@@ -789,8 +1048,8 @@ class MusicService: ObservableObject, MusicServiceProtocol {
                     return Track(
                         id: track.id,
                         title: track.attributes.name,
-                        artist: track.attributes.artistName,
-                        durationSeconds: Int(track.attributes.durationInMillis / 1000),
+                        artist: track.attributes.artistName ?? "Unknown Artist",
+                        durationSeconds: Int((track.attributes.durationInMillis ?? 0) / 1000),
                         bpm: cachedBPM,  // Use cached BPM if available
                         artworkURL: artworkURL
                     )
@@ -1311,18 +1570,45 @@ enum PlaybackState {
     case stopped
 }
 
+/// Source of a playlist card shown in the playlist browser.
+enum MusicPlaylistSource: String {
+    case library
+    case catalogPlaylist
+    case station
+}
+
 /// Simplified playlist model for UI display
 struct MusicPlaylist: Identifiable, Equatable {
     let id: String
     let name: String
     let trackCount: Int
     let artwork: Artwork?
+    let source: MusicPlaylistSource
+    let sourceSection: String?
+    
+    init(
+        id: String,
+        name: String,
+        trackCount: Int,
+        artwork: Artwork?,
+        source: MusicPlaylistSource = .library,
+        sourceSection: String? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.trackCount = trackCount
+        self.artwork = artwork
+        self.source = source
+        self.sourceSection = sourceSection
+    }
     
     // Custom Equatable implementation since Artwork is not Equatable
     static func == (lhs: MusicPlaylist, rhs: MusicPlaylist) -> Bool {
         return lhs.id == rhs.id &&
                lhs.name == rhs.name &&
-               lhs.trackCount == rhs.trackCount
+               lhs.trackCount == rhs.trackCount &&
+               lhs.source == rhs.source &&
+               lhs.sourceSection == rhs.sourceSection
         // Note: We don't compare artwork since it's not Equatable
     }
 }
@@ -1375,8 +1661,8 @@ private struct LibraryTrackItem: Codable {
 
 private struct LibraryTrackAttributes: Codable {
     let name: String
-    let artistName: String
-    let durationInMillis: Int
+    let artistName: String?
+    let durationInMillis: Int?
     let previews: [PreviewAsset]?
     let artwork: ArtworkAttributes?
 }
@@ -1430,6 +1716,15 @@ private struct AddTracksRequestItem: Codable {
     let type: String
 }
 
+/// Response structure for `/v1/me/storefront`.
+private struct MeStorefrontResponse: Codable {
+    let data: [StorefrontItem]
+}
+
+private struct StorefrontItem: Codable {
+    let id: String
+}
+
 // MARK: - Preview Helper
 
 #if DEBUG
@@ -1474,4 +1769,3 @@ actor AsyncSemaphore {
         }
     }
 }
-

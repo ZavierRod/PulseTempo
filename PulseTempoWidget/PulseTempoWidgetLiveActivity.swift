@@ -48,14 +48,23 @@ struct PulseTempoWidgetLiveActivity: Widget {
                                 .aspectRatio(contentMode: .fill)
                                 .frame(width: 44, height: 44)
                                 .cornerRadius(8)
+                        } else if let url = Bundle.main.url(forResource: "inSyncLogoCircle", withExtension: "png"),
+                                  let data = try? Data(contentsOf: url),
+                                  let uiImage = UIImage(data: data) {
+                            Image(uiImage: uiImage)
+                                .renderingMode(.original)
+                                .resizable()
+                                .interpolation(.high)
+                                .antialiased(true)
+                                .scaledToFit()
+                                .frame(width: 44, height: 44)
+                                .cornerRadius(8)
                         } else {
                             Image("inSyncLogo")
+                                .renderingMode(.original)
                                 .resizable()
                                 .scaledToFit()
-                                .frame(width: 60)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.white.opacity(0.85))
+                                .frame(width: 44, height: 44)
                                 .cornerRadius(8)
                         }
                         
@@ -118,10 +127,34 @@ struct LockScreenLiveActivityView: View {
     var body: some View {
         HStack(spacing: 16) {
             // Artwork
-            Image("inSyncLogo")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 80)
+            if let data = state.artworkData, let uiImage = UIImage(data: data) {
+                Image(uiImage: uiImage)
+                    .renderingMode(.original)
+                    .resizable()
+                    .interpolation(.high)
+                    .antialiased(true)
+                    .scaledToFit()
+                    .frame(width: 50, height: 50)
+                    .cornerRadius(8)
+            } else if let url = Bundle.main.url(forResource: "inSyncLogoCircle", withExtension: "png"),
+                      let data = try? Data(contentsOf: url),
+                      let uiImage = UIImage(data: data) {
+                Image(uiImage: uiImage)
+                    .renderingMode(.original)
+                    .resizable()
+                    .interpolation(.high)
+                    .antialiased(true)
+                    .scaledToFit()
+                    .frame(width: 50, height: 50)
+                    .cornerRadius(8)
+            } else {
+                Image("inSyncLogo")
+                    .renderingMode(.original)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 50, height: 50)
+                    .cornerRadius(8)
+            }
             
             // Track Info
             VStack(alignment: .leading, spacing: 2) {

@@ -27,10 +27,9 @@ struct MainTabView: View {
                 }
                 .tag(Tab.home)
             
-            PlaylistSelectionView { tracks in
-                print("✅ Selected \(tracks.count) tracks from playlists")
+            PlaylistSelectionView(onSelectionChanged: {
                 homeViewModel.refreshPlaylists()
-            }
+            })
             .tabItem {
                 Image(systemName: "music.note.list")
                 Text("Playlists")

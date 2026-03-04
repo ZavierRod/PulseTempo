@@ -71,7 +71,12 @@ struct HomeView: View {
                 )
             }
             .sheet(isPresented: $showingSelectedPlaylists) {
-                SelectedPlaylistsSheet(playlists: viewModel.selectedPlaylists)
+                SelectedPlaylistsSheet(
+                    playlists: viewModel.selectedPlaylists,
+                    onDeletePlaylist: { playlistId in
+                        viewModel.removeSelectedPlaylist(playlistId)
+                    }
+                )
             }
             .sheet(item: $selectedWorkout) { workout in
                 WorkoutSummaryView(workout: workout, onDismiss: {
@@ -433,82 +438,56 @@ struct WorkoutModeButton: View {
 // MARK: - Selected Playlists Sheet
 
 struct SelectedPlaylistsSheet: View {
-    let playlists: [MusicPlaylist]
     var onSongsAdded: (([Track]) -> Void)? = nil
     var isWorkoutContext: Bool = false
+    var onDeletePlaylist: ((String) -> Void)? = nil
+    
     @Environment(\.dismiss) private var dismiss
     @State private var selectedPlaylistForViewing: MusicPlaylist?
+    @State private var displayedPlaylists: [MusicPlaylist]
+    
+    init(
+        playlists: [MusicPlaylist],
+        onSongsAdded: (([Track]) -> Void)? = nil,
+        isWorkoutContext: Bool = false,
+        onDeletePlaylist: ((String) -> Void)? = nil
+    ) {
+        self.onSongsAdded = onSongsAdded
+        self.isWorkoutContext = isWorkoutContext
+        self.onDeletePlaylist = onDeletePlaylist
+        _displayedPlaylists = State(initialValue: playlists)
+    }
     
     var body: some View {
         NavigationStack {
             ZStack {
                 GradientBackground()
                 
-                if playlists.isEmpty {
+                if displayedPlaylists.isEmpty {
                     Text("No playlists selected")
                         .font(.bebasNeueSubheadline)
                         .foregroundColor(.white.opacity(0.7))
                 } else {
-                    ScrollView {
-                        LazyVStack(spacing: 12) {
-                            ForEach(playlists) { playlist in
-                                HStack(spacing: 12) {
-                                    CachedAsyncImage(
-                                        url: playlist.artwork?.url(width: 100, height: 100)
-                                    ) { image in
-                                        image
-                                            .resizable()
-                                            .aspectRatio(contentMode: .fill)
-                                            .frame(width: 56, height: 56)
-                                            .cornerRadius(8)
-                                    } placeholder: {
-                                        placeholderArtwork
-                                    }
-                                    
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(playlist.name)
-                                            .font(.bebasNeueSubheadline)
-                                            .foregroundColor(.white)
-                                            .lineLimit(1)
-                                        
-                                        Text("\(playlist.trackCount) \(playlist.trackCount == 1 ? "song" : "songs")")
-                                            .font(.bebasNeueCaption)
-                                            .foregroundColor(.white.opacity(0.7))
-                                    }
-                                    
-                                    Spacer()
-                                    
-                                    Button(action: { selectedPlaylistForViewing = playlist }) {
-                                        HStack(spacing: 4) {
-                                            Text("View")
-                                                .font(.system(size: 14, weight: .medium))
-                                            Image(systemName: "chevron.right")
-                                                .font(.system(size: 12, weight: .semibold))
+                    List {
+                        ForEach(displayedPlaylists) { playlist in
+                            if onDeletePlaylist != nil {
+                                playlistRow(playlist)
+                                    .listRowBackground(Color.clear)
+                                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                        Button(role: .destructive) {
+                                            removePlaylist(playlist)
+                                        } label: {
+                                            Label("Delete", systemImage: "trash")
                                         }
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 6)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 8)
-                                                .fill(Color.white.opacity(0.2))
-                                        )
                                     }
-                                    .buttonStyle(PlainButtonStyle())
-                                }
-                                .padding(12)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.white.opacity(0.1))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 12)
-                                                .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                                        )
-                                )
+                            } else {
+                                playlistRow(playlist)
+                                    .listRowBackground(Color.clear)
                             }
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 16)
                     }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
                 }
             }
             .navigationTitle("Selected Playlists")
@@ -530,6 +509,60 @@ struct SelectedPlaylistsSheet: View {
                 )
             }
         }
+    }
+    
+    private func playlistRow(_ playlist: MusicPlaylist) -> some View {
+        HStack(spacing: 12) {
+            CachedAsyncImage(
+                url: playlist.artwork?.url(width: 100, height: 100)
+            ) { image in
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 56, height: 56)
+                    .cornerRadius(8)
+            } placeholder: {
+                placeholderArtwork
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(playlist.name)
+                    .font(.bebasNeueSubheadline)
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                
+                Text("\(playlist.trackCount) \(playlist.trackCount == 1 ? "song" : "songs")")
+                    .font(.bebasNeueCaption)
+                    .foregroundColor(.white.opacity(0.7))
+            }
+            
+            Spacer()
+            
+            Button(action: { selectedPlaylistForViewing = playlist }) {
+                HStack(spacing: 4) {
+                    Text("View")
+                        .font(.system(size: 14, weight: .medium))
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.white.opacity(0.2))
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .padding(.vertical, 6)
+        .listRowSeparator(.hidden)
+    }
+    
+    private func removePlaylist(_ playlist: MusicPlaylist) {
+        guard onDeletePlaylist != nil else { return }
+        displayedPlaylists.removeAll { $0.id == playlist.id }
+        onDeletePlaylist?(playlist.id)
     }
     
     private var placeholderArtwork: some View {

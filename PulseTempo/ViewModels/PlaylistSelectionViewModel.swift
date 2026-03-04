@@ -30,6 +30,9 @@ final class PlaylistSelectionViewModel: ObservableObject {
     /// List of user's playlists from Apple Music
     @Published var playlists: [MusicPlaylist] = []
     
+    /// Playlists grouped into horizontal shelf sections
+    @Published var playlistSections: [PlaylistShelfSection] = []
+    
     /// Set of selected playlist IDs
     @Published var selectedPlaylistIds: Set<String> = []
     
@@ -80,7 +83,12 @@ final class PlaylistSelectionViewModel: ObservableObject {
     private func setupObservers() {
         // Observe playlists from music service
         musicService.$userPlaylists
-            .assign(to: &$playlists)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] playlists in
+                self?.playlists = playlists
+                self?.playlistSections = Self.buildSections(from: playlists)
+            }
+            .store(in: &cancellables)
         
         // Observe loading state
         musicService.$isLoading
@@ -93,6 +101,14 @@ final class PlaylistSelectionViewModel: ObservableObject {
                 self?.errorMessage = error.localizedDescription
             }
             .store(in: &cancellables)
+        
+        Publishers.CombineLatest($selectedPlaylistIds, $playlists)
+            .map { selectedIds, playlists in
+                playlists
+                    .filter { selectedIds.contains($0.id) }
+                    .reduce(0) { $0 + $1.trackCount }
+            }
+            .assign(to: &$estimatedTrackCount)
             
         // Observe analysis status and trigger completion callback when done
         musicService.$analyzingTrackCount
@@ -188,8 +204,6 @@ final class PlaylistSelectionViewModel: ObservableObject {
         } else {
             selectedPlaylistIds.insert(playlistId)
         }
-        
-        updateEstimatedTrackCount()
     }
     
     /// Check if a playlist is selected
@@ -263,11 +277,29 @@ final class PlaylistSelectionViewModel: ObservableObject {
     // ═══════════════════════════════════════════════════════════
     // MARK: - Private Methods
     
-    /// Update estimated track count from selected playlists
-    private func updateEstimatedTrackCount() {
-        estimatedTrackCount = playlists
-            .filter { selectedPlaylistIds.contains($0.id) }
-            .reduce(0) { $0 + $1.trackCount }
+    /// Group playlists into named shelf sections for the Apple Music-style UI.
+    private static func buildSections(from playlists: [MusicPlaylist]) -> [PlaylistShelfSection] {
+        guard !playlists.isEmpty else { return [] }
+        
+        let grouped = Dictionary(grouping: playlists) { $0.sourceSection ?? "Your Playlists" }
+        let preferredOrder = ["Top Picks For You", "Made For You", "Your Playlists"]
+        
+        var sections: [PlaylistShelfSection] = preferredOrder.compactMap { title in
+            guard let sectionPlaylists = grouped[title], !sectionPlaylists.isEmpty else { return nil }
+            return PlaylistShelfSection(title: title, playlists: sectionPlaylists)
+        }
+        
+        let known = Set(preferredOrder)
+        let extras = grouped.keys
+            .filter { !known.contains($0) }
+            .sorted()
+            .compactMap { title -> PlaylistShelfSection? in
+                guard let sectionPlaylists = grouped[title], !sectionPlaylists.isEmpty else { return nil }
+                return PlaylistShelfSection(title: title, playlists: sectionPlaylists)
+            }
+        
+        sections.append(contentsOf: extras)
+        return sections
     }
 }
 
@@ -288,4 +320,12 @@ enum PlaylistSelectionError: LocalizedError {
             return "No tracks found in selected playlists"
         }
     }
+}
+
+/// A horizontally scrolling playlist shelf section.
+struct PlaylistShelfSection: Identifiable, Equatable {
+    let title: String
+    let playlists: [MusicPlaylist]
+    
+    var id: String { title }
 }

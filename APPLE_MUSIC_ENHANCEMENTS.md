@@ -12,8 +12,8 @@ Some Apple Music tracks have animated/video artwork. Display a subtle looping an
 - Check `artwork` for video/animated variants
 - Use `AVPlayerLayer` looping behind the album art card
 
-### 2. Dynamic Island / Live Activity (ActivityKit)
-Live Activity on the Lock Screen and Dynamic Island during an active run.
+### ✅ 2. Dynamic Island / Live Activity (ActivityKit)
+Live Activity on the Lock Screen and Dynamic Island during an active run. (Completed)
 - Compact view: album art thumbnail + heart rate + current BPM
 - Requires `ActivityKit` + `NSSupportsLiveActivities` in Info.plist
 - Lock screen view: elapsed time, avg HR, current song title

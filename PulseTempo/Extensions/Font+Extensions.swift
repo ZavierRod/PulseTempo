@@ -6,13 +6,17 @@
 //
 
 import SwiftUI
+import UIKit
 
 extension Font {
     // MARK: - Custom Font: Bebas Neue
     
     /// Base function to create Bebas Neue font with custom size
     static func bebasNeue(size: CGFloat) -> Font {
-        return .custom("BebasNeue-Regular", size: size)
+        if UIFont(name: "BebasNeue-Regular", size: size) != nil {
+            return .custom("BebasNeue-Regular", size: size)
+        }
+        return .system(size: size, weight: .semibold, design: .rounded)
     }
     
     // MARK: - Predefined Sizes
