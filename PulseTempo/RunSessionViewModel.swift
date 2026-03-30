@@ -101,6 +101,7 @@ final class RunSessionViewModel: ObservableObject {
     private let heartRateService: HeartRateServiceProtocol  // Monitors heart rate
     private let musicService: MusicServiceProtocol          // Controls music playback
     private let liveActivityManager = LiveActivityManager.shared // Controls Dynamic Island UI
+    private let djTriggerManager = DJTriggerManager()        // AI DJ auto-trigger system
     
     // TRACK MANAGEMENT
     private var tracks: [Track] = []             // All available tracks
@@ -523,6 +524,9 @@ final class RunSessionViewModel: ObservableObject {
             artworkData: nil,
             runModeIcon: runMode == .cadenceMatching ? "figure.run" : "heart.fill"
         )
+        
+        // Start AI DJ auto-trigger monitoring
+        djTriggerManager.startMonitoring(vm: self)
     }
 
     /// Attempt to recover music playback after an XPC interruption
@@ -622,6 +626,7 @@ final class RunSessionViewModel: ObservableObject {
         // Stop services
         heartRateService.stopMonitoring()
         musicService.stop()
+        djTriggerManager.stopMonitoring()
         
         // Stop timer
         runTimer?.invalidate()
@@ -684,6 +689,7 @@ final class RunSessionViewModel: ObservableObject {
         // Stop services
         heartRateService.stopMonitoring()
         musicService.stop()
+        djTriggerManager.stopMonitoring()
         
         // Stop timer
         runTimer?.invalidate()

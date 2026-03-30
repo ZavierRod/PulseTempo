@@ -463,14 +463,48 @@ struct ActiveRunView: View {
             
             Spacer()
             
-            // Empty view for symmetry
-            VStack(spacing: 2) {
-                Text("MODE")
-                    .font(.caption2)
-                    .foregroundColor(.clear)
-                Text(runSessionVM.runMode.displayName)
-                    .font(.caption)
-                    .foregroundColor(.clear)
+            // DJ Test Button
+            Button(action: {
+                Task {
+                    do {
+                        // Gather context from the active session
+                        let runnerName = AuthService.shared.currentUser?.username ?? "Runner"
+                        
+                        let context = DJContext(
+                            runnerName: runnerName,
+                            currentHeartRate: Int(runSessionVM.currentHeartRate),
+                            elapsedTime: runSessionVM.elapsedTime,
+                            currentSongTitle: runSessionVM.currentTrack?.title ?? "Unknown Track",
+                            currentSongArtist: runSessionVM.currentTrack?.artist ?? "Unknown Artist",
+                            currentSongElapsed: Int(runSessionVM.currentPlaybackTime),
+                            currentSongDuration: runSessionVM.currentTrack?.durationSeconds ?? 0,
+                            nextSongTitle: nil,
+                            nextSongArtist: nil,
+                            triggerReason: "manual_test"
+                        )
+                        
+                        // Ask OpenAI for a unique phrase
+                        let script = try await OpenAIPromptService.shared.generateDJScript(context: context)
+                        print("🤖 [AI DJ] Generated Script: \(script)")
+                        
+                        // Play the phrase over ElevenLabs
+                        DJVoiceManager.shared.speak(text: script)
+                    } catch {
+                        print("❌ [AI DJ] Test failed: \(error.localizedDescription)")
+                    }
+                }
+            }) {
+                VStack(spacing: 2) {
+                    Image(systemName: "waveform")
+                        .font(.body)
+                    Text("DJ TEST")
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                }
+                .foregroundColor(.white)
+                .padding(8)
+                .background(Color.black.opacity(0.3))
+                .cornerRadius(8)
             }
         }
         .padding(.horizontal, 20)

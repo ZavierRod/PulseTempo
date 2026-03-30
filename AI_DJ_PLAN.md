@@ -13,12 +13,39 @@ The AI DJ needs to seamlessly pick the *next* track based on real-time data.
 
 ## 🎙️ Phase 2: Dynamic Audio Voiceovers (The DJ Persona)
 Bring the DJ to life by having them announce milestones and queue changes.
-- **Speech Synthesis:** Implement an `AVSpeechSynthesizer` manager (`DJVoiceManager`) to generate on-device audio.
-- **Audio Ducking:** Automatically lower the music volume (ducking) while the DJ is speaking, then ramp it back up.
-- **Contextual Prompts:**
-  - *"Great job, you just hit the tempo zone! Heart rate is currently 155. Here’s a high-energy track to keep you locked in: [Next Song Title]."*
-  - *"You've been pushing hard, time to catch your breath. Queuing up a recovery track."*
-- **Frequency Controls:** Allow the user to set how often the DJ interrupts (e.g., Every 1 Mile, Every Zone Change, or Smart/Adaptive).
+
+**Implementation Chunks for Phase 2:**
+- [x] **Step 2.1: The DJ Audio Engine (`DJVoiceManager`)**
+  - Singleton class that downloads and plays `.mp3` files via `AVAudioPlayer`.
+  - Ducks Apple Music while the DJ speaks, restores volume when done.
+- [x] **Step 2.2: Audio Ducking Setup (`AVAudioSession`)**
+  - Configured `.duckOthers` + `.interruptSpokenAudioAndMixWithOthers` for aggressive ducking.
+- [x] **Step 2.3: ElevenLabs TTS Networking Layer (`ElevenLabsService`)**
+  - Secure network request to ElevenLabs API using `eleven_multilingual_v2` model.
+  - Returns MP3 audio data played directly by `DJVoiceManager`.
+- [x] **Step 2.4: Contextual Prompt Generation (`OpenAIPromptService`)**
+  - Hits `gpt-4o-mini` with live workout context (runner name, HR, elapsed time, current song, next song).
+  - Returns a unique, conversational 1-2 sentence DJ script every time.
+  - Maintains a **rolling 50-script dialogue history cache** fed back into the prompt to prevent repetition.
+  - Uses `triggerReason` to control whether to reference the next queued song (only during `song_transition`).
+- [x] **Step 2.5: Automatic DJ Triggers (`DJTriggerManager`)**
+  - Intelligent auto-trigger system with a 2-second evaluation timer.
+  - **Song Position Context:** Passes current song elapsed time + total duration.
+  - **Trigger Events:**
+    - 🎵 **Song Transition:** ~15 seconds before the current song ends.
+    - ⏱️ **Time-Based Check-ins:** Every ~5 minutes.
+    - ❤️ **HR Zone Change:** When crossing into a new zone.
+    - 🏃 **Workout Milestones:** Every 10 minutes.
+  - **Cooldown Timer:** 90-second minimum gap.
+  - **Smart Timing:** Only speaks mid-song (30s–end-10s buffer) unless song transition.
+- [x] **Bug Fix: Repetitive Dialogue**
+  - Added a 50-entry rolling dialogue cache in `OpenAIPromptService`.
+  - Recent 10 scripts are fed into the system prompt with explicit "do NOT repeat" instructions.
+  - Bumped temperature to 1.0 for maximum creativity.
+- [x] **Bug Fix: Inaccurate Queued Song References**
+  - Added `triggerReason` field to `DJContext`.
+  - Next-song data is only passed during `song_transition` triggers.
+  - Mid-song check-ins explicitly tell OpenAI "do NOT mention upcoming songs."
 
 ## 🎛️ Phase 3: Seamless Audio Transitions
 Ensure the music never stops abruptly.
@@ -32,6 +59,9 @@ Ensure the music never stops abruptly.
 ---
 
 ### Technical Prerequisites & Next Steps
-1. **Define the Prompt Engine:** Build a Swift service that generates the text strings the DJ will say based on incoming `WorkoutManager` metrics.
-2. **Audio Ducking Test:** Validate that `AVAudioSession` can successfully duck the `ApplicationMusicPlayer` without pausing the workout context.
-3. **Queue Injection Test:** Confirm that modifying the music queue mid-song via `MusicKit` is completely seamless.
+1. ~~Define the Prompt Engine~~ ✅ Done (`OpenAIPromptService`)
+2. ~~Audio Ducking Test~~ ✅ Done (verified on physical device)
+3. ~~Build `DJTriggerManager`~~ ✅ Done (all 4 trigger types + cooldown + smart timing)
+4. ~~Fix repetitive dialogue~~ ✅ Done (50-entry history cache + anti-repetition prompt)
+5. ~~Fix inaccurate queue references~~ ✅ Done (conditional next-song via `triggerReason`)
+6. **Queue Injection Test:** Confirm that modifying the music queue mid-song via `MusicKit` is completely seamless.
