@@ -20,6 +20,10 @@ struct SettingsView: View {
     @State private var showingDevicePicker = false
     @State private var showingSetupInstructions = false
     @State private var showingSignOutAlert = false
+    @State private var showingDeleteAccountConfirmation = false
+    @State private var showingDeleteErrorAlert = false
+    @State private var deleteErrorMessage = ""
+    @State private var isDeletingAccount = false
     
     // MARK: - Body
     
@@ -143,6 +147,42 @@ struct SettingsView: View {
                         Text("Configure how the app matches music to your heart rate")
                             .foregroundColor(.white.opacity(0.6))
                     }
+
+                    Section {
+                        if let user = authService.currentUser {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(user.username ?? user.email ?? "Signed In")
+                                    .font(.bebasNeueBody)
+                                    .foregroundColor(.white)
+
+                                if let email = user.email {
+                                    Text(email)
+                                        .font(.bebasNeueCaption)
+                                        .foregroundColor(.white.opacity(0.7))
+                                }
+                            }
+                            .padding(.vertical, 8)
+                            .listRowBackground(Color.white.opacity(0.1))
+                        }
+
+                        Button(role: .destructive) {
+                            showingDeleteAccountConfirmation = true
+                        } label: {
+                            HStack {
+                                Image(systemName: "trash")
+                                Text(isDeletingAccount ? "Deleting Account..." : "Delete Account")
+                            }
+                            .foregroundColor(.red)
+                        }
+                        .disabled(isDeletingAccount)
+                        .listRowBackground(Color.white.opacity(0.1))
+                    } header: {
+                        Text("Account")
+                            .foregroundColor(.white.opacity(0.8))
+                    } footer: {
+                        Text("Deleting your account permanently removes your PulseTempo profile and saved run history from the backend.")
+                            .foregroundColor(.white.opacity(0.6))
+                    }
                     
                     // About Section
                     Section {
@@ -150,18 +190,16 @@ struct SettingsView: View {
                             Text("Version")
                                 .foregroundColor(.white)
                             Spacer()
-                            Text("1.0.0")
+                            Text(versionString)
                                 .foregroundColor(.white.opacity(0.7))
                         }
                         .listRowBackground(Color.white.opacity(0.1))
                         
-                        Button("Privacy Policy") {
-                            // TODO: Open privacy policy
-                        }
-                        .listRowBackground(Color.white.opacity(0.1))
-                        
-                        Button("Terms of Service") {
-                            // TODO: Open terms
+                        NavigationLink {
+                            PrivacyPolicyView()
+                        } label: {
+                            Text("Privacy Policy")
+                                .foregroundColor(.white)
                         }
                         .listRowBackground(Color.white.opacity(0.1))
                     } header: {
@@ -197,6 +235,25 @@ struct SettingsView: View {
             } message: {
                 Text("Are you sure you want to sign out?")
             }
+            .confirmationDialog(
+                "Delete Account?",
+                isPresented: $showingDeleteAccountConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Delete Account", role: .destructive) {
+                    Task {
+                        await deleteAccount()
+                    }
+                }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("This permanently deletes your PulseTempo account and saved run history.")
+            }
+            .alert("Account Deletion Failed", isPresented: $showingDeleteErrorAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(deleteErrorMessage)
+            }
         }
         .sheet(isPresented: $showingDevicePicker) {
             DevicePickerSheet(
@@ -206,6 +263,29 @@ struct SettingsView: View {
                     showingDevicePicker = false
                 }
             )
+        }
+    }
+
+    private var versionString: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
+        return "\(version) (\(build))"
+    }
+
+    @MainActor
+    private func deleteAccount() async {
+        isDeletingAccount = true
+
+        defer {
+            isDeletingAccount = false
+        }
+
+        do {
+            try await authService.deleteAccount()
+            hasCompletedOnboarding = false
+        } catch {
+            deleteErrorMessage = error.localizedDescription
+            showingDeleteErrorAlert = true
         }
     }
 }

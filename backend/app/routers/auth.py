@@ -1,11 +1,14 @@
 from typing import Any, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 from pydantic import BaseModel
 from jose import jwt, JWTError
 from app import deps
 from app.core import security
 from app.crud import crud_user
+from app.models.playlist import Playlist, playlist_track
+from app.models.run import Run, RunTrack
 from app.schemas.token import Token
 from app.schemas.user import UserCreateApple, UserCreateEmail, UserLoginEmail, UserResponse
 from app.core.apple_auth import verify_apple_token
@@ -91,6 +94,40 @@ def get_current_user_info(
     Get current authenticated user's info.
     """
     return current_user
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+def delete_current_user_account(
+    db: Session = Depends(deps.get_db),
+    current_user=Depends(deps.get_current_user)
+):
+    """
+    Permanently delete the current user and associated run / playlist records.
+    """
+    run_ids = [run_id for (run_id,) in db.query(Run.id).filter(Run.user_id == current_user.id).all()]
+    playlist_ids = [playlist_id for (playlist_id,) in db.query(Playlist.id).filter(Playlist.user_id == current_user.id).all()]
+
+    try:
+        if run_ids:
+            db.query(RunTrack).filter(RunTrack.run_id.in_(run_ids)).delete(synchronize_session=False)
+
+        if playlist_ids:
+            db.execute(
+                playlist_track.delete().where(playlist_track.c.playlist_id.in_(playlist_ids))
+            )
+            db.query(Playlist).filter(Playlist.id.in_(playlist_ids)).delete(synchronize_session=False)
+
+        db.query(Run).filter(Run.user_id == current_user.id).delete(synchronize_session=False)
+        db.delete(current_user)
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete account"
+        ) from exc
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ═══════════════════════════════════════════════════════════

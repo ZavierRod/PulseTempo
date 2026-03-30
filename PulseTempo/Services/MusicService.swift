@@ -193,36 +193,6 @@ class MusicService: ObservableObject, MusicServiceProtocol {
         setupPlaybackObservers()
     }
     
-    // MARK: - Local Network Permission
-    
-    /// Triggers a simple network request to prompt the user for local network permission early.
-    /// This should be called during app initialization to ensure permission is granted
-    /// before BPM analysis is attempted.
-    func warmUpLocalNetworkPermission() {
-        // Use Railway production backend
-        let host = "https://pulsetempo-production.up.railway.app"
-        
-        guard let url = URL(string: "\(host)/api/health") else {
-            // Fallback: ping the health check to trigger network permission prompt
-            guard let fallbackUrl = URL(string: "\(host)/api/health") else { return }
-            URLSession.shared.dataTask(with: fallbackUrl) { _, _, _ in
-                print("🌐 Local network permission warm-up request sent (fallback)")
-            }.resume()
-            return
-        }
-        
-        // Make a simple request to trigger the local network permission dialog
-        URLSession.shared.dataTask(with: url) { _, _, error in
-            if let error = error {
-                print("🌐 Local network warm-up failed (this is expected if backend is not running): \(error.localizedDescription)")
-            } else {
-                print("✅ Local network permission granted and backend is reachable")
-            }
-        }.resume()
-        
-        print("🌐 Local network permission warm-up request sent")
-    }
-    
     // MARK: - BPM Cache Persistence
     
     /// Load BPM cache from UserDefaults on app launch

@@ -279,7 +279,7 @@ class AuthService: ObservableObject {
     
     /// Log out the current user
     func logout() {
-        keychainManager.clearAll()
+        clearLocalSessionAndData()
         
         Task { @MainActor in
             isAuthenticated = false
@@ -288,6 +288,13 @@ class AuthService: ObservableObject {
         }
         
         print("👋 [Auth] User logged out")
+    }
+
+    // MARK: - Account Deletion
+
+    /// Permanently delete the authenticated user's account and server-side data.
+    func deleteAccount() async throws {
+        try await deleteAccount(retryingAfterRefresh: true)
     }
     
     // MARK: - Token Access
@@ -401,5 +408,78 @@ class AuthService: ObservableObject {
     /// Clear error message
     func clearError() {
         errorMessage = nil
+    }
+
+    private func clearLocalSessionAndData() {
+        keychainManager.clearAll()
+        PlaylistStorageManager.shared.clearSelectedPlaylists()
+
+        let defaults = UserDefaults.standard
+        for key in defaults.dictionaryRepresentation().keys where key.hasPrefix("pendingTracks_") {
+            defaults.removeObject(forKey: key)
+        }
+    }
+
+    private func deleteAccount(retryingAfterRefresh shouldRetryAfterRefresh: Bool) async throws {
+        guard let accessToken = keychainManager.getAccessToken() else {
+            throw AuthError.notAuthenticated
+        }
+
+        await MainActor.run {
+            isLoading = true
+            errorMessage = nil
+        }
+
+        defer {
+            Task { @MainActor in
+                isLoading = false
+            }
+        }
+
+        let url = URL(string: "\(baseURL)/api/auth/me")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw AuthError.networkError("Invalid response")
+            }
+
+            switch httpResponse.statusCode {
+            case 204:
+                clearLocalSessionAndData()
+                await MainActor.run {
+                    isAuthenticated = false
+                    currentUser = nil
+                    errorMessage = nil
+                }
+                print("🗑️ [Auth] Account deleted successfully")
+
+            case 401, 403:
+                if shouldRetryAfterRefresh, await refreshTokens() {
+                    try await deleteAccount(retryingAfterRefresh: false)
+                    return
+                }
+                throw AuthError.notAuthenticated
+
+            default:
+                let errorBody = String(data: data, encoding: .utf8) ?? "Unknown error"
+                throw AuthError.serverError(errorBody)
+            }
+        } catch let error as AuthError {
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+            }
+            throw error
+        } catch {
+            let authError = AuthError.networkError(error.localizedDescription)
+            await MainActor.run {
+                errorMessage = authError.localizedDescription
+            }
+            throw authError
+        }
     }
 }
