@@ -87,6 +87,38 @@ struct RunResponse: Codable, Identifiable {
     }
 }
 
+struct DJScriptRequest: Codable {
+    let runnerName: String
+    let currentHeartRate: Int
+    let elapsedTimeSeconds: Int
+    let currentSongTitle: String
+    let currentSongArtist: String
+    let currentSongElapsedSeconds: Int
+    let currentSongDurationSeconds: Int
+    let nextSongTitle: String?
+    let nextSongArtist: String?
+    let triggerReason: String
+    let recentScripts: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case runnerName = "runner_name"
+        case currentHeartRate = "current_heart_rate"
+        case elapsedTimeSeconds = "elapsed_time_seconds"
+        case currentSongTitle = "current_song_title"
+        case currentSongArtist = "current_song_artist"
+        case currentSongElapsedSeconds = "current_song_elapsed_seconds"
+        case currentSongDurationSeconds = "current_song_duration_seconds"
+        case nextSongTitle = "next_song_title"
+        case nextSongArtist = "next_song_artist"
+        case triggerReason = "trigger_reason"
+        case recentScripts = "recent_scripts"
+    }
+}
+
+struct DJScriptResponse: Codable {
+    let script: String
+}
+
 /// Centralized API client for authenticated requests
 class APIService {
     
@@ -153,6 +185,12 @@ class APIService {
         let runs: [RunResponse] = try await get(endpoint: "/api/runs/?skip=\(skip)&limit=\(limit)")
         print("📊 [API] Fetched \(runs.count) runs")
         return runs
+    }
+
+    /// Request a short AI DJ script from the backend.
+    func generateDJScript(_ requestBody: DJScriptRequest) async throws -> DJScriptResponse {
+        let data = try jsonEncoder.encode(requestBody)
+        return try await post(endpoint: "/api/ai/dj-script", body: data)
     }
     
     // MARK: - Generic HTTP Methods

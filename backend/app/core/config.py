@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     SECRET_KEY: str = os.getenv(
         "SECRET_KEY", "dev_secret_key_change_in_production")
 
+    # AI integrations
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+
     # Direct DATABASE_URL (Railway provides this)
     DATABASE_URL: str = os.getenv("DATABASE_URL", "")
 

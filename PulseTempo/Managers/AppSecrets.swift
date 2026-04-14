@@ -1,7 +1,6 @@
 import Foundation
 
 enum AppSecretKey: String {
-    case openAIAPIKey = "OPENAI_API_KEY"
     case elevenLabsAPIKey = "ELEVENLABS_API_KEY"
 }
 

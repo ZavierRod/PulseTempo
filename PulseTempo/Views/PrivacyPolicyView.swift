@@ -21,7 +21,7 @@ struct PrivacyPolicyView: View {
 
                     policySection(
                         title: "Services We Rely On",
-                        body: "PulseTempo uses Apple HealthKit for workout and heart rate access, Apple Music and MusicKit for playlist and playback features, and the PulseTempo backend to store account and run data. If AI DJ features are separately configured and enabled, related prompt or voice requests may be sent to OpenAI and ElevenLabs."
+                        body: "PulseTempo uses Apple HealthKit for workout and heart rate access, Apple Music and MusicKit for playlist and playback features, and the PulseTempo backend to store account and run data. If AI DJ features are enabled, DJ prompt requests are sent to the PulseTempo backend, which may call OpenAI. Voice generation may also use ElevenLabs when configured."
                     )
 
                     policySection(
